@@ -1,11 +1,12 @@
 """
-Heritage-Guard | Render Cloud Edition: app.py (v3.2 - Zero-PyTorch + Browser AI + SEO)
+Heritage-Guard | Render Cloud Edition: app.py (v3.3 - Mobile AI Fix + Snap-Shut + Cache-Bust v4.3)
 Optimized for Render Free Tier (512 MB RAM, ₹0, no credit card):
   - Lightweight Flask + OpenCV-Headless backend (~120 MB RAM)
-  - Browser-Side AI (TensorFlow.js COCO-SSD + Privacy-Shutter Liveness) in Buyer-Only Mode
-  - Weaver Studio PIN Lock (WEAVER_PIN env var, default: 2026) + unguessable studio download tokens
-  - Full 3-hash SQLite GI Vault registration (source, 8x8 Zari-Work, Meme-Embedded)
-  - Accurate JPEG Q=85 survival gate: JPEG(cloaked) vs JPEG(original)
+  - Buyer-Only Mode uses active 320x240 canvas -> Full MobileNetV2 COCO-SSD + 2.5s sticky hold
+  - Responsive spotlight (~45-50px on phones, 95px on desktop) + instant touchend snap-shut
+  - Transparent touch shield + 550ms long-press mobile copy trap
+  - Auto-updates style.css?v=4.3 and spotlight_shield.js?v=4.3 so phones never load stale cache
+  - Full 3-hash SQLite GI Vault registration & accurate JPEG Q=85 survival check
   - Dynamic HTTPS /robots.txt, /sitemap.xml, and Google Search Console meta injection
 """
 
@@ -34,7 +35,8 @@ from preprocessor import (
 from cloak_engine import apply_cloak
 from db_manager import DatabaseManager
 
-VERSION = "3.2-render"
+VERSION = "3.3-render"
+ASSET_VER = "4.3"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEAVER_PIN = os.environ.get("WEAVER_PIN", "2026").strip() or "2026"
 MAX_RAM_ASSETS = 15
@@ -295,8 +297,13 @@ def index():
                 page_html = page_html.replace("</head>", seo_block + "</head>", 1)
 
             page_html = re.sub(
+                r"style\.css(?:\?v=[0-9.]+)?",
+                f"style.css?v={ASSET_VER}",
+                page_html,
+            )
+            page_html = re.sub(
                 r"spotlight_shield\.js(?:\?v=[0-9.]+)?",
-                "spotlight_shield.js?v=4.2",
+                f"spotlight_shield.js?v={ASSET_VER}",
                 page_html,
             )
             return Response(page_html, mimetype="text/html")
@@ -331,24 +338,23 @@ def serve_static(filename):
     return send_from_directory(BASE_DIR, filename)
 
 
-# ---------------- CYBERGUARD BUYER-ONLY MODE (ON-DEVICE BROWSER AI) ----------------
+# ---------------- CYBERGUARD BUYER-ONLY MODE (UPGRADED MOBILE AI + SNAP-SHUT) ----------------
 BUYER_ONLY_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Heritage Guard | Protected GI Saree Buyer Inspection</title>
-  <link rel="stylesheet" href="/static/style.css?v=4.0" />
+  <link rel="stylesheet" href="/static/style.css?v=__ASSET_VER__" />
   <style>
     .hidden { display: none !important; }
-    .buyer-shell { max-width: 820px; margin: 22px auto; padding: 0 18px 36px; }
-    .buyer-meta { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; font-size: 0.84rem; color: #cbd5e1; }
-    .buyer-gate-chip { padding: 7px 13px; border-radius: 6px; font-size: 0.76rem; font-weight: 700; border: 1px solid rgba(56, 189, 248, 0.45); background: rgba(15, 23, 52, 0.85); color: #93c5fd; }
-    .emoji-shield-overlay { padding: 12px 14px !important; overflow-y: auto; }
+    .buyer-shell { max-width: 820px; margin: 16px auto; padding: 0 12px 30px; }
+    .buyer-meta { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; font-size: 0.82rem; color: #cbd5e1; }
+    .buyer-gate-chip { padding: 6px 11px; border-radius: 6px; font-size: 0.72rem; font-weight: 700; border: 1px solid rgba(56, 189, 248, 0.45); background: rgba(15, 23, 52, 0.85); color: #93c5fd; }
     .honeypot-meme-video {
       width: 100%;
-      max-width: 245px;
-      max-height: 146px;
+      max-width: 225px;
+      max-height: 132px;
       border-radius: 10px;
       border: 2px solid #f87171;
       background: #000;
@@ -358,11 +364,6 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       box-shadow: 0 8px 22px rgba(0, 0, 0, 0.75);
       pointer-events: none;
     }
-    .meme-honeypot h2 { font-size: 1.0rem !important; margin: 2px 0 !important; line-height: 1.25; }
-    .reason-pill { padding: 3px 10px !important; font-size: 0.74rem !important; margin: 4px 0 !important; }
-    .emoji-shield-overlay .legal-warning-box { padding: 6px 10px !important; margin: 5px auto !important; }
-    .emoji-shield-overlay .legal-warning-box p { font-size: 0.69rem !important; line-height: 1.36 !important; }
-    .honeypot-sub { font-size: 0.7rem !important; margin: 4px auto 0 !important; }
     .camera-unlock-gate {
       position: absolute;
       inset: 0;
@@ -373,45 +374,37 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       align-items: center;
       justify-content: center;
       text-align: center;
-      padding: 24px;
-      gap: 10px;
+      padding: 18px;
+      gap: 8px;
+      overflow-y: auto;
     }
     .camera-unlock-gate.hidden { display: none !important; }
-    .unlock-icon { font-size: 3.1rem; line-height: 1; }
-    .camera-unlock-gate h3 { margin: 0; font-size: 1.18rem; color: #ffffff; }
-    .camera-unlock-gate p { margin: 0; max-width: 470px; font-size: 0.83rem; color: #cbd5e1; line-height: 1.5; }
+    .unlock-icon { font-size: 2.4rem; line-height: 1; }
+    .camera-unlock-gate h3 { margin: 0; font-size: 1rem; color: #ffffff; }
+    .camera-unlock-gate p { margin: 0; max-width: 460px; font-size: 0.78rem; color: #cbd5e1; line-height: 1.45; }
     .unlock-error-msg {
       color: #fecaca;
       background: rgba(127, 29, 29, 0.85);
       border: 1px solid #f87171;
       border-radius: 8px;
-      padding: 8px 12px;
-      font-size: 0.78rem;
-      max-width: 470px;
+      padding: 7px 10px;
+      font-size: 0.74rem;
+      max-width: 450px;
     }
     .unlock-error-msg.hidden { display: none !important; }
     .btn-unlock-cam {
       background: linear-gradient(135deg, #4d88ff, #2563eb);
       color: #ffffff;
       border: 1px solid rgba(147, 197, 253, 0.6);
-      padding: 12px 24px;
+      padding: 10px 18px;
       border-radius: 8px;
-      font-size: 0.9rem;
+      font-size: 0.84rem;
       font-weight: 700;
       cursor: pointer;
       box-shadow: 0 8px 24px rgba(77, 136, 255, 0.45);
-      margin-top: 4px;
+      margin-top: 2px;
     }
     .btn-unlock-cam:disabled { opacity: 0.65; cursor: wait; }
-    .hidden-buyer-video {
-      position: fixed;
-      bottom: 0;
-      right: 0;
-      width: 2px;
-      height: 2px;
-      opacity: 0.01;
-      pointer-events: none;
-    }
   </style>
 </head>
 <body>
@@ -429,7 +422,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
     <div class="nav-inner">
       <div class="cyber-brand">
         <span class="cyber-logo-ring">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="9" opacity="0.5"/>
             <path d="M12 3L4 7v5c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V7l-8-4z"/>
             <circle cx="12" cy="12" r="2.5" fill="currentColor"/>
@@ -442,9 +435,9 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
         <span id="gate-mode-pill" class="buyer-gate-chip">__GATE_PILL__</span>
         <div id="guard-status-badge" class="pill __STATUS_CLASS__">__STATUS_INIT__</div>
         <select id="lang-toggle" class="cyber-select" aria-label="Language">
-          <option value="en">🌐 English (EN)</option>
-          <option value="te">🌐 తెలుగు (TE)</option>
-          <option value="hi">🌐 हिन्दी (HI)</option>
+          <option value="en">🌐 EN</option>
+          <option value="te">🌐 తెలుగు</option>
+          <option value="hi">🌐 हिन्दी</option>
         </select>
       </div>
     </div>
@@ -461,19 +454,20 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       </div>
 
       <p class="v17-subtext" id="ui-buyer-help">
-        Move your cursor or finger inside the frame to inspect threads through the 95px Spotlight Aperture. Zero camera frames ever leave your device — AI scanning runs locally in your browser.
+        Slide your finger or cursor inside the frame to inspect threads through the adaptive Spotlight Aperture. Lifting your finger snaps the blur shut; long-pressing, copying, or raising a phone triggers an instant 0ms lockout.
       </p>
 
       <div id="weave-viewport" class="weave-viewport __INITIAL_LOCK_CLASS__">
         <img id="weave-blurred-layer" class="weave-blurred-layer" src="/api/asset_image/__ASSET_ID__" alt="Blurred Protected Weave" draggable="false" />
         <img id="weave-clear-layer" class="weave-clear-layer" src="/api/asset_image/__ASSET_ID__" alt="Protected Spotlight Weave" draggable="false" />
         <canvas id="anti-shutter-canvas" width="640" height="400"></canvas>
+        <div id="viewport-touch-shield" class="viewport-touch-shield"></div>
 
         <div id="camera-unlock-gate" class="camera-unlock-gate __GATE_OVERLAY_CLASS__">
           <div class="unlock-icon">🔒📷</div>
           <h3 id="unlock-gate-title">LIVE CAMERA REQUIRED TO UNLOCK GI SAREE</h3>
           <p id="unlock-gate-desc">
-            This Tier-1 Zero-Trust GI link requires an unobstructed, live device camera (open physical privacy shutters). Zero photos or frames are uploaded — AI runs strictly on your own device.
+            This Tier-1 Zero-Trust GI link requires an unobstructed, live device camera. Zero photos or frames ever leave your device — AI phone defense runs strictly inside your browser.
           </p>
           <div id="unlock-error-msg" class="unlock-error-msg hidden"></div>
           <button id="btn-unlock-camera" class="btn-unlock-cam" type="button">
@@ -507,7 +501,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
         </div>
       </div>
 
-      <div class="legal-warning-box" style="max-width:100%; margin-top:14px;">
+      <div class="legal-warning-box" style="max-width:100%; margin-top:12px;">
         <p id="static-buyer-legal-text">
           ⚖️ <strong>PROTECTED GI HANDLOOM DESIGN:</strong> Unauthorised copying or commercial reproduction of textile designs may constitute <strong>Intellectual Property Theft</strong>, punishable under Sections 51 and 63 of the Copyright Act, 1957, Section 22 of the Designs Act, 2000, and Section 39 of the GI Act, 1999. Legal action may result in imprisonment, fines and damages.
         </p>
@@ -515,32 +509,32 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
     </section>
   </main>
 
-  <video id="buyer-cam-video" class="hidden-buyer-video" autoplay muted playsinline></video>
+  <video id="buyer-cam-video" class="cam-offscreen" width="320" height="240" autoplay muted playsinline></video>
+  <canvas id="buyer-ai-canvas" width="320" height="240" style="display:none;"></canvas>
   <canvas id="buyer-liveness-canvas" width="96" height="72" style="display:none;"></canvas>
 
   <script>
   (function () {
     const GATE_MODE = "__GATE_MODE__";
-    const SPOTLIGHT_RADIUS_PX = 95;
     const STATUTORY_PLAIN = "⚠️ STATUTORY LEGAL WARNING: Unauthorised copying or commercial reproduction of textile designs may constitute Intellectual Property Theft, punishable under Sections 51 and 63 of the Copyright Act, 1957, Section 22 of the Designs Act, 2000, and Section 39 of the GI Act, 1999. Legal action may result in imprisonment, fines and damages.";
 
     const I18N = {
       en: {
-        help: "Move your cursor or finger inside the frame to inspect threads through the 95px Spotlight Aperture. Zero camera frames ever leave your device — AI scanning runs locally in your browser.",
+        help: "Slide your finger or cursor inside the frame to inspect threads through the adaptive Spotlight Aperture. Lifting your finger snaps the blur shut; long-pressing, copying, or raising a phone triggers an instant 0ms lockout.",
         title: "PAKDA GAYA! UNAUTHORISED COPYING / OPTICAL THEFT BLOCKED",
         unlockBtn: "📷 Turn On Camera to Unlock GI Saree",
         unlockTitle: "LIVE CAMERA REQUIRED TO UNLOCK GI SAREE",
         legal: '⚖️ <strong>STATUTORY LEGAL NOTICE:</strong> Unauthorised copying or commercial reproduction of textile designs may constitute <strong>Intellectual Property Theft</strong>, punishable under <strong>Sections 51 and 63 of the Copyright Act, 1957</strong>, <strong>Section 22 of the Designs Act, 2000</strong>, and <strong>Section 39 of the GI Act, 1999</strong>. Legal action may result in imprisonment, fines and damages.'
       },
       te: {
-        help: "95px స్పాట్‌లైట్ ద్వారా చేనేత డిజైన్‌ను పరిశీలించడానికి కర్సర్ లేదా వేలిని కదిలించండి. కెమెరా ఫ్రేమ్‌లు మీ పరికరాన్ని వదిలి వెళ్లవు — AI మీ బ్రౌజర్‌లోనే పనిచేస్తుంది.",
+        help: "స్పాట్‌లైట్ ద్వారా చేనేత డిజైన్‌ను పరిశీలించడానికి వేలు లేదా కర్సర్ కదిలించండి. వేలు ఎత్తగానే చిత్రం మసకబారుతుంది; లాంగ్-ప్రెస్, కాపీ లేదా ఫోన్ ఎత్తితే 0ms లో స్క్రీన్ లాక్ అవుతుంది.",
         title: "పట్టుబడ్డారు! అనధికార కాపీ / ఫోటో చోరీ నిరోధించబడింది",
         unlockBtn: "📷 GI చీరను చూడటానికి కెమెరా ఆన్ చేయండి",
         unlockTitle: "GI చీరను అన్‌లాక్ చేయడానికి లైవ్ కెమెరా అవసరం",
         legal: '⚖️ <strong>చట్టపరమైన హెచ్చరిక:</strong> చేనేత డిజైన్లను అనధికారికంగా కాపీ చేయడం <strong>మేధో సంపత్తి చోరీ (IP Theft)</strong> కిందకు వస్తుంది. ఇది <strong>కాపీరైట్ చట్టం 1957 (సెక్షన్లు 51 &amp; 63)</strong>, <strong>డిజైన్స్ చట్టం 2000 (సెక్షన్ 22)</strong> మరియు <strong>GI చట్టం 1999 (సెక్షన్ 39)</strong> ప్రకారం జైలు శిక్ష మరియు జరిమానాకు గురిచేస్తుంది.'
       },
       hi: {
-        help: "95px स्पॉटलाइट के माध्यम से बुनाई देखने के लिए कर्सर या उंगली घुमाएं। कोई भी कैमरा फ्रेम आपके डिवाइस से बाहर नहीं जाता — AI सीधे आपके ब्राउज़र में चलता है।",
+        help: "स्पॉटलाइट के माध्यम से बुनाई देखने के लिए उंगली या कर्सर घुमाएं। उंगली हटाते ही छवि धुंधली हो जाती है; लॉन्ग-प्रेस, कॉपी या फ़ोन उठाने पर 0ms में स्क्रीन लॉक हो जाएगी।",
         title: "पकड़ा गया! अनधिकृत कॉपी / ऑप्टिकल चोरी ब्लॉक की गई",
         unlockBtn: "📷 GI साड़ी देखने के लिए कैमरा चालू करें",
         unlockTitle: "GI साड़ी अनलॉक करने के लिए लाइव कैमरा आवश्यक है",
@@ -562,12 +556,15 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
     const canvas = document.getElementById("anti-shutter-canvas");
     const toast = document.getElementById("copy-warning-toast");
     const camVideo = document.getElementById("buyer-cam-video");
+    const aiCanvas = document.getElementById("buyer-ai-canvas");
     const liveCanvas = document.getElementById("buyer-liveness-canvas");
 
     let cameraUnlocked = (GATE_MODE !== "strict");
     let shieldLocked = (GATE_MODE === "strict");
     let memeOverlayVisible = false;
     let manualHoldUntil = 0;
+    let aiHoldUntil = 0;
+    let lastAiThreatReason = "CELL_PHONE_DETECTED_BROWSER_AI";
     let lastBreachLogTs = 0;
     let toastTimer = null;
     let flickerPhase = 0;
@@ -579,6 +576,23 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
     let prevGray = null;
     let liveFrames = 0;
     let frozenStreak = 0;
+    let longPressTimer = null;
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    function getSpotlightRadius() {
+      const w = viewport ? (viewport.getBoundingClientRect().width || window.innerWidth) : 340;
+      if (w >= 560) return 95;
+      return Math.round(Math.max(40, Math.min(62, w * 0.135)));
+    }
+
+    function shutSpotlight() {
+      if (clearLayer) clearLayer.style.clipPath = "circle(0px at 50% 50%)";
+    }
+
+    function clearLongPress() {
+      if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+    }
 
     if (memeVideo) {
       memeVideo.muted = true;
@@ -618,14 +632,19 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       }).catch(() => {});
     }
 
-    function loadScript(src) {
+    function loadScriptWithFallback(urls) {
       return new Promise((resolve, reject) => {
-        const s = document.createElement("script");
-        s.src = src;
-        s.async = true;
-        s.onload = resolve;
-        s.onerror = reject;
-        document.head.appendChild(s);
+        let idx = 0;
+        function tryNext() {
+          if (idx >= urls.length) { reject(new Error("CDNs failed")); return; }
+          const s = document.createElement("script");
+          s.src = urls[idx++];
+          s.async = true;
+          s.onload = resolve;
+          s.onerror = tryNext;
+          document.head.appendChild(s);
+        }
+        tryNext();
       });
     }
 
@@ -633,21 +652,39 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       if (cocoModel) return cocoModel;
       try {
         if (!window.tf) {
-          await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
+          await loadScriptWithFallback([
+            "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js",
+            "https://unpkg.com/@tensorflow/tfjs@4.22.0/dist/tf.min.js"
+          ]);
         }
         if (!window.cocoSsd) {
-          await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
+          await loadScriptWithFallback([
+            "https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js",
+            "https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"
+          ]);
         }
-        cocoModel = await window.cocoSsd.load({ base: "lite_mobilenet_v2" });
+        if (window.tf && window.tf.ready) {
+          await window.tf.ready();
+          if (window.tf.getBackend() !== "webgl") {
+            try { await window.tf.setBackend("webgl"); } catch (_) {
+              try { await window.tf.setBackend("cpu"); } catch (__) {}
+            }
+          }
+        }
+        try {
+          cocoModel = await window.cocoSsd.load({ base: "mobilenet_v2" });
+        } catch (_) {
+          cocoModel = await window.cocoSsd.load({ base: "lite_mobilenet_v2" });
+        }
         return cocoModel;
       } catch (_) {
         return null;
       }
     }
 
-    function checkLivenessAndShutter() {
+    function checkLivenessFromCanvas() {
       const ctx = liveCanvas.getContext("2d", { willReadFrequently: true });
-      ctx.drawImage(camVideo, 0, 0, 96, 72);
+      ctx.drawImage(aiCanvas, 0, 0, 96, 72);
       const data = ctx.getImageData(0, 0, 96, 72).data;
       const n = 96 * 72;
       const gray = new Uint8Array(n);
@@ -664,7 +701,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       const mean = sum / n;
       const std = Math.sqrt(Math.max(0, (sumSq / n) - (mean * mean)));
 
-      if (mean < 15.0 || std < 7.0) {
+      if (mean < 16.0 || std < 7.5) {
         prevGray = gray;
         liveFrames = 0;
         return { threat: true, live: false, reason: "PRIVACY_SHUTTER_OR_COVERED_CAMERA" };
@@ -672,11 +709,8 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
 
       if (prevGray) {
         let diffSum = 0;
-        for (let i = 0; i < n; i++) {
-          diffSum += Math.abs(gray[i] - prevGray[i]);
-        }
-        const diff = diffSum / n;
-        if (diff < 0.32) {
+        for (let i = 0; i < n; i++) diffSum += Math.abs(gray[i] - prevGray[i]);
+        if (diffSum / n < 0.30) {
           frozenStreak++;
           liveFrames = 0;
         } else {
@@ -695,20 +729,59 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       return { threat: false, live: liveFrames >= 2, reason: "SAFE" };
     }
 
+    function evaluatePredictions(preds) {
+      if (!Array.isArray(preds) || preds.length === 0) return "";
+      const personPresent = preds.some((p) => p.class === "person" && p.score >= 0.30);
+      const frameArea = 320 * 240;
+
+      for (const p of preds) {
+        const cls = p.class;
+        const sc = p.score || 0;
+        const box = p.bbox || [0, 0, 0, 0];
+        const areaRatio = (box[2] * box[3]) / frameArea;
+
+        if (cls === "cell phone" && sc >= 0.14) return "CELL_PHONE_DETECTED_BROWSER_AI";
+        if (cls === "remote" && sc >= 0.22 && areaRatio < 0.45) return "HANDHELD_OPTICAL_DEVICE_DETECTED";
+        if (personPresent && cls === "book" && sc >= 0.28 && areaRatio < 0.40) return "HANDHELD_DEVICE_CASE_DETECTED";
+        if (personPresent && (cls === "tv" || cls === "laptop") && sc >= 0.32 && areaRatio < 0.35) return "HANDHELD_SCREEN_DETECTED";
+        if (personPresent && cls === "mouse" && sc >= 0.30 && areaRatio < 0.20) return "HANDHELD_CAMERA_LENS_DETECTED";
+      }
+      return "";
+    }
+
     function moveSpotlight(clientX, clientY) {
       if (shieldLocked || !cameraUnlocked || !viewport || !clearLayer) return;
       const rect = viewport.getBoundingClientRect();
-      clearLayer.style.clipPath = `circle(${SPOTLIGHT_RADIUS_PX}px at ${clientX - rect.left}px ${clientY - rect.top}px)`;
+      const r = getSpotlightRadius();
+      clearLayer.style.clipPath = `circle(${r}px at ${clientX - rect.left}px ${clientY - rect.top}px)`;
     }
 
     viewport.addEventListener("mousemove", (e) => moveSpotlight(e.clientX, e.clientY));
-    viewport.addEventListener("touchmove", (e) => {
-      if (e.touches && e.touches[0]) {
-        e.preventDefault();
-        moveSpotlight(e.touches[0].clientX, e.touches[0].clientY);
-      }
+    viewport.addEventListener("mouseleave", shutSpotlight);
+
+    viewport.addEventListener("touchstart", (e) => {
+      if (shieldLocked || !cameraUnlocked || !e.touches || !e.touches[0]) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      moveSpotlight(t.clientX, t.clientY);
+      clearLongPress();
+      longPressTimer = setTimeout(() => {
+        triggerBreach("MOBILE_LONG_PRESS_COPY_BLOCKED");
+      }, 550);
     }, { passive: false });
-    viewport.addEventListener("mouseleave", () => { clearLayer.style.clipPath = "circle(0px at 50% 50%)"; });
+
+    viewport.addEventListener("touchmove", (e) => {
+      if (shieldLocked || !cameraUnlocked || !e.touches || !e.touches[0]) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      if (Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY) > 12) clearLongPress();
+      moveSpotlight(t.clientX, t.clientY);
+    }, { passive: false });
+
+    viewport.addEventListener("touchend", () => { clearLongPress(); shutSpotlight(); });
+    viewport.addEventListener("touchcancel", () => { clearLongPress(); shutSpotlight(); });
 
     function stopBuyerCameraStream() {
       if (scanTimer) { clearTimeout(scanTimer); scanTimer = null; }
@@ -720,10 +793,12 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       prevGray = null;
       liveFrames = 0;
       frozenStreak = 0;
+      aiHoldUntil = 0;
     }
 
     function showLiveShutterGateWarning(reasonCode) {
       shieldLocked = true;
+      shutSpotlight();
       viewport.classList.add("threat-locked");
       overlay.classList.add("hidden");
       if (memeOverlayVisible) { memeOverlayVisible = false; stopMemeVideo(); }
@@ -733,7 +808,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
         unlockBtn.textContent = "⏳ Waiting for Open Live Camera...";
       }
       if (unlockErr) {
-        unlockErr.textContent = "🚫 Camera shutter closed or lens covered (" + reasonCode + "). Open/uncover your camera to unlock automatically.";
+        unlockErr.textContent = "🚫 Blocked (" + reasonCode + "). Open camera shutter and lower phones to unlock automatically.";
         unlockErr.classList.remove("hidden");
       }
       badge.textContent = "🔒 BLOCKED: " + reasonCode;
@@ -746,6 +821,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
     function lockForClosedCamera(reasonCode, friendlyMsg) {
       cameraUnlocked = false;
       shieldLocked = true;
+      shutSpotlight();
       stopBuyerCameraStream();
 
       viewport.classList.add("threat-locked");
@@ -779,6 +855,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       }
 
       if (locked) {
+        shutSpotlight();
         viewport.classList.add("threat-locked");
         overlay.classList.remove("hidden");
         if (!memeOverlayVisible) { memeOverlayVisible = true; startMemeVideo(); }
@@ -794,9 +871,13 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
         if (memeOverlayVisible) { memeOverlayVisible = false; stopMemeVideo(); }
         if (unlockGate) unlockGate.classList.add("hidden");
         if (unlockErr) unlockErr.classList.add("hidden");
-        badge.textContent = GATE_MODE === "strict" ? "🛡️ ON-DEVICE AI CAMERA ACTIVE" : "🛡️ SPOTLIGHT + 8x8 ZARI CLOAK";
+        badge.textContent = GATE_MODE === "strict"
+          ? (cocoModel ? "🛡️ BROWSER AI CAMERA ACTIVE" : "🛡️ LIVENESS CAMERA ACTIVE")
+          : "🛡️ SPOTLIGHT + 8x8 ZARI CLOAK";
         badge.className = "pill pill-safe";
-        diag.textContent = GATE_MODE === "strict" ? "SAFE (BROWSER AI ACTIVE)" : "STANDARD PREVIEW";
+        diag.textContent = GATE_MODE === "strict"
+          ? (cocoModel ? "SAFE (AI PHONE GUARD ACTIVE)" : "SAFE (LIVENESS ONLY)")
+          : "STANDARD PREVIEW";
         diag.style.color = "#34d399";
       }
     }
@@ -830,40 +911,37 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       if (!scanInFlight && camVideo.readyState >= 2 && camVideo.videoWidth > 0) {
         scanInFlight = true;
         try {
-          const liveCheck = checkLivenessAndShutter();
-          if (liveCheck.threat) {
-            if (!cameraUnlocked) showLiveShutterGateWarning(liveCheck.reason);
-            else setShield(true, liveCheck.reason);
-          } else {
-            let aiThreat = "";
-            if (cocoModel) {
-              const preds = await cocoModel.detect(camVideo, 8, 0.24);
-              const personPresent = preds.some((p) => p.class === "person" && p.score >= 0.35);
-              for (const p of preds) {
-                if (p.class === "cell phone" && p.score >= 0.25) {
-                  aiThreat = "CELL_PHONE_DETECTED_BROWSER_AI";
-                  break;
-                }
-                if (personPresent && (p.class === "remote" || p.class === "book") && p.score >= 0.45) {
-                  aiThreat = "HANDHELD_OPTICAL_DEVICE_DETECTED";
-                  break;
-                }
-              }
-            }
+          const aiCtx = aiCanvas.getContext("2d", { willReadFrequently: true });
+          aiCtx.drawImage(camVideo, 0, 0, 320, 240);
 
-            if (aiThreat) {
-              if (!cameraUnlocked) showLiveShutterGateWarning(aiThreat);
-              else setShield(true, aiThreat);
-            } else if (!cameraUnlocked) {
-              if (liveCheck.live) {
-                cameraUnlocked = true;
-                setShield(false, "LIVE_CAMERA_VERIFIED");
-              } else if (unlockBtn) {
-                unlockBtn.textContent = "⏳ Verifying Live Camera Sensor...";
-              }
-            } else {
-              setShield(false, "SAFE_VIEWER_VERIFIED");
+          const liveCheck = checkLivenessFromCanvas();
+          let threatReason = liveCheck.threat ? liveCheck.reason : "";
+
+          if (!threatReason && cocoModel) {
+            const preds = await cocoModel.detect(aiCanvas, 15, 0.14);
+            threatReason = evaluatePredictions(preds);
+          }
+
+          const now = Date.now();
+          if (threatReason) {
+            aiHoldUntil = now + 2500;
+            lastAiThreatReason = threatReason;
+          } else if (now < aiHoldUntil) {
+            threatReason = lastAiThreatReason;
+          }
+
+          if (threatReason) {
+            if (!cameraUnlocked) showLiveShutterGateWarning(threatReason);
+            else setShield(true, threatReason);
+          } else if (!cameraUnlocked) {
+            if (liveCheck.live) {
+              cameraUnlocked = true;
+              setShield(false, "LIVE_CAMERA_VERIFIED");
+            } else if (unlockBtn) {
+              unlockBtn.textContent = "⏳ Verifying Live Camera Sensor...";
             }
+          } else {
+            setShield(false, "SAFE_VIEWER_VERIFIED");
           }
         } catch (_) {
         } finally {
@@ -872,7 +950,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       }
 
       if (buyerStream) {
-        scanTimer = setTimeout(runBrowserAIScanLoop, 280);
+        scanTimer = setTimeout(runBrowserAIScanLoop, 220);
       }
     }
 
@@ -887,7 +965,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
 
       if (unlockBtn) {
         unlockBtn.disabled = true;
-        unlockBtn.textContent = "⏳ Requesting Camera & Loading On-Device AI...";
+        unlockBtn.textContent = "⏳ Requesting Camera Permission...";
       }
 
       try {
@@ -906,11 +984,11 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
           track.onmute = () => lockForClosedCamera("CAMERA_MUTED_OR_BLOCKED", "Camera feed was interrupted or blocked. Keep your camera active to continue.");
         }
 
-        if (unlockBtn) unlockBtn.textContent = "⏳ Loading On-Device AI Phone Detector...";
+        if (unlockBtn) unlockBtn.textContent = "⏳ Downloading Phone-Detector AI (~4s)...";
         await ensureBrowserAI();
 
         if (unlockBtn) unlockBtn.textContent = "⏳ Verifying Live Camera Sensor...";
-        scanTimer = setTimeout(runBrowserAIScanLoop, 250);
+        scanTimer = setTimeout(runBrowserAIScanLoop, 220);
       } catch (err) {
         const msg =
           err && err.name === "NotAllowedError"
@@ -924,6 +1002,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
 
     if (unlockBtn) unlockBtn.addEventListener("click", startBuyerCameraGate);
     window.addEventListener("pagehide", () => { stopBuyerCameraStream(); stopMemeVideo(); });
+    window.addEventListener("blur", shutSpotlight);
 
     document.addEventListener("contextmenu", (e) => { e.preventDefault(); triggerBreach("RIGHT_CLICK_BLOCKED"); });
     document.addEventListener("dragstart", (e) => { e.preventDefault(); triggerBreach("IMAGE_DRAG_BLOCKED"); });
@@ -1005,6 +1084,7 @@ def buyer_only_view(gate, asset_id):
 
     page = (
         BUYER_ONLY_HTML
+        .replace("__ASSET_VER__", ASSET_VER)
         .replace("__GATE_MODE__", clean_gate)
         .replace("__ASSET_ID__", html.escape(clean_id))
         .replace("__ASSET_LABEL__", html.escape(label))

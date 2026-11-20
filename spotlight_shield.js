@@ -1,10 +1,12 @@
 /**
- * Heritage-Guard v4.2 | Render Cloud Edition: spotlight_shield.js (v4.2)
- * - Runs TensorFlow.js COCO-SSD phone detection + privacy-shutter liveness directly in Chrome
- * - Zero camera frames ever leave the user's device (keeps Render RAM under ~140 MB)
- * - Homepage camera starts OFF until clicked (zero unwanted popups)
- * - Weaver Studio PIN Unlock bar protects /api/protect while Verifier & Audit stay public
- * - Muted pakda_gaya_meme.mp4 plays smoothly on lockout with automatic emoji fallback
+ * Heritage-Guard v4.3 | Render Cloud Edition: spotlight_shield.js (v4.3)
+ * Fixes & Upgrades:
+ *  - Upgrades on-device browser AI to full MobileNetV2 COCO-SSD (dual-CDN + CPU fallback)
+ *    reading from an active 320x240 canvas (fixes mobile Chrome/Safari blank-texture misses)
+ *  - Adds 2.5s sticky threat hold + lowered phone & proxy-device thresholds for reliable locks
+ *  - Responsive spotlight radius (~45-50px on phones, 95px on desktop)
+ *  - Instant touchend / touchcancel snap-shut so lifting a finger to screenshot shows 100% blur
+ *  - Transparent touch shield + 550ms stationary long-press copy trap on phones
  */
 
 const STATUTORY_PLAIN_TEXT =
@@ -15,7 +17,7 @@ const I18N_DICT = {
     title: 'Heritage Guard <span class="gold-version">v4.2</span>',
     catalogHeading: "B2B BUYER INSPECTION GATE — Interactive Spotlight & Optical Shield",
     catalogHelp:
-      "Hover inside the protected viewport to inspect intricate Zari and Ikat weave geometry through the 95px Spotlight Aperture. Right-clicking, copying, dragging, capturing the screen, or raising a phone triggers an instant 0ms PAKDA GAYA! statutory lockout.",
+      "Move your cursor or slide your finger inside the protected frame to inspect threads through the adaptive Spotlight Aperture. Lifting your finger snaps the blur shut; long-pressing, copying, or raising a phone triggers an instant 0ms PAKDA GAYA! statutory lockout.",
     uploadHeading: "🛡️ ARTISAN COOPERATIVE STUDIO — Zero-Retention RAM Cloak",
     verifyHeading: "🔎 FORENSIC 3-ZONE LSB & SQL GI VERIFIER",
     auditHeading: "📋 SQL SECURITY BREACH & AUDIT VAULT",
@@ -33,7 +35,7 @@ const I18N_DICT = {
     title: 'హెరిటేజ్-గార్డ్ <span class="gold-version">v4.2</span>',
     catalogHeading: "B2B కొనుగోలుదారు స్పాట్‌లైట్ వ్యూపోర్ట్ & కెమెరా రక్షణ కవచం",
     catalogHelp:
-      "95px స్పాట్‌లైట్ ద్వారా చేనేత జరి మరియు ఇకత్ డిజైన్‌ను పరిశీలించండి. చిత్రాన్ని కాపీ చేయడం, రైట్-క్లిక్ చేయడం లేదా ఫోన్/కెమెరా పైకి ఎత్తితే 0ms లో చట్టపరమైన హెచ్చరికతో స్క్రీన్ లాక్ అవుతుంది.",
+      "స్పాట్‌లైట్ ద్వారా చేనేత జరి మరియు ఇకత్ డిజైన్‌ను పరిశీలించండి. వేలు ఎత్తగానే చిత్రం మసకబారుతుంది; కాపీ, లాంగ్-ప్రెస్ లేదా ఫోన్/కెమెరా పైకి ఎత్తితే 0ms లో స్క్రీన్ లాక్ అవుతుంది.",
     uploadHeading: "🛡️ చేనేత సహకార స్టూడియో — జీరో-రిటెన్షన్ RAM క్లోక్",
     verifyHeading: "🔎 3-జోన్ LSB & GI యాజమాన్య నిర్ధారణ",
     auditHeading: "📋 భద్రతా ఆడిట్ లాగ్స్ (SQL వాల్ట్)",
@@ -51,7 +53,7 @@ const I18N_DICT = {
     title: 'हेरिटेज-गार्ड <span class="gold-version">v4.2</span>',
     catalogHeading: "B2B खरीदार स्पॉटलाइट निरीक्षण गेट और ऑप्टिकल सुरक्षा कवच",
     catalogHelp:
-      "95px स्पॉटलाइट अपर्चर के माध्यम से ज़री और इकत बुनाई का निरीक्षण करें। छवि को कॉपी करना, राइट-क्लिक करना या फ़ोन/कैमरा उठाना 0ms में कानूनी चेतावनी के साथ स्क्रीन लॉक कर देता है।",
+      "स्पॉटलाइट के माध्यम से ज़री और इकत बुनाई का निरीक्षण करें। उंगली हटाते ही छवि तुरंत धुंधली हो जाती है; कॉपी, लॉन्ग-प्रेस या फ़ोन उठाने पर 0ms में स्क्रीन लॉक हो जाती है।",
     uploadHeading: "🛡️ बुनकर सहकारी स्टूडियो — जीरो-रिटेंशन RAM क्लोक",
     verifyHeading: "🔎 फॉरेंसिक 3-ज़ोन LSB और SQL GI सत्यापन",
     auditHeading: "📋 SQL सुरक्षा उल्लंघन और ऑडिट वॉल्ट",
@@ -68,11 +70,11 @@ const I18N_DICT = {
 };
 
 (function () {
-  const SPOTLIGHT_RADIUS_PX = 95;
-
   let shieldLocked = false;
   let memeOverlayVisible = false;
   let manualHoldUntil = 0;
+  let aiHoldUntil = 0;
+  let lastAiThreatReason = "CELL_PHONE_DETECTED_BROWSER_AI";
   let lastAiLogTs = 0;
   let toastTimeoutId = null;
   let flickerPhase = 0;
@@ -84,14 +86,20 @@ const I18N_DICT = {
 
   let studioStream = null;
   let studioVideoEl = null;
+  let aiCanvasEl = null;
   let liveCanvasEl = null;
   let scanTimer = null;
   let scanInFlight = false;
   let cocoModel = null;
+  let aiModelLabel = "Browser MobileNetV2";
   let prevGray = null;
   let frozenStreak = 0;
   let memeVideo = null;
   let weaverPin = "";
+
+  let longPressTimer = null;
+  let touchStartX = 0;
+  let touchStartY = 0;
 
   try { weaverPin = sessionStorage.getItem("hg_weaver_pin") || ""; } catch (_) {}
 
@@ -114,36 +122,78 @@ const I18N_DICT = {
   const antiShutterCanvas = document.getElementById("anti-shutter-canvas");
   const copyWarningToast = document.getElementById("copy-warning-toast");
 
-  function loadScript(src) {
+  function getSpotlightRadius() {
+    if (!viewport) return 52;
+    const w = viewport.getBoundingClientRect().width || window.innerWidth;
+    if (w >= 560) return 95;
+    return Math.round(Math.max(40, Math.min(62, w * 0.135)));
+  }
+
+  function shutSpotlight() {
+    if (clearLayer) clearLayer.style.clipPath = "circle(0px at 50% 50%)";
+  }
+
+  function loadScriptWithFallback(urls) {
     return new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = src;
-      s.async = true;
-      s.onload = resolve;
-      s.onerror = reject;
-      document.head.appendChild(s);
+      let idx = 0;
+      function tryNext() {
+        if (idx >= urls.length) {
+          reject(new Error("All script CDNs failed"));
+          return;
+        }
+        const s = document.createElement("script");
+        s.src = urls[idx++];
+        s.async = true;
+        s.onload = resolve;
+        s.onerror = tryNext;
+        document.head.appendChild(s);
+      }
+      tryNext();
     });
   }
 
   async function ensureBrowserAI() {
     if (cocoModel) return cocoModel;
     try {
+      if (valDetector) valDetector.textContent = "⏳ Loading Browser AI...";
       if (!window.tf) {
-        await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js");
+        await loadScriptWithFallback([
+          "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js",
+          "https://unpkg.com/@tensorflow/tfjs@4.22.0/dist/tf.min.js",
+        ]);
       }
       if (!window.cocoSsd) {
-        await loadScript("https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js");
+        await loadScriptWithFallback([
+          "https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js",
+          "https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js",
+        ]);
       }
-      cocoModel = await window.cocoSsd.load({ base: "lite_mobilenet_v2" });
+      if (window.tf && window.tf.ready) {
+        await window.tf.ready();
+        if (window.tf.getBackend() !== "webgl") {
+          try { await window.tf.setBackend("webgl"); } catch (_) {
+            try { await window.tf.setBackend("cpu"); } catch (__) {}
+          }
+        }
+      }
+      try {
+        cocoModel = await window.cocoSsd.load({ base: "mobilenet_v2" });
+        aiModelLabel = "Browser MobileNetV2 AI";
+      } catch (_) {
+        cocoModel = await window.cocoSsd.load({ base: "lite_mobilenet_v2" });
+        aiModelLabel = "Browser Lite-MobileNet AI";
+      }
+      if (valDetector) valDetector.textContent = aiModelLabel + " (Ready)";
       return cocoModel;
     } catch (_) {
+      if (valDetector) valDetector.textContent = "Liveness Guard (AI CDN Blocked)";
       return null;
     }
   }
 
-  function checkStudioLiveness() {
+  function checkStudioLivenessFromCanvas() {
     const ctx = liveCanvasEl.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(studioVideoEl, 0, 0, 96, 72);
+    ctx.drawImage(aiCanvasEl, 0, 0, 96, 72);
     const data = ctx.getImageData(0, 0, 96, 72).data;
     const n = 96 * 72;
     const gray = new Uint8Array(n);
@@ -159,7 +209,7 @@ const I18N_DICT = {
 
     const mean = sum / n;
     const std = Math.sqrt(Math.max(0, (sumSq / n) - (mean * mean)));
-    if (mean < 15.0 || std < 7.0) {
+    if (mean < 16.0 || std < 7.5) {
       prevGray = gray;
       return { threat: true, reason: "PRIVACY_SHUTTER_OR_COVERED_CAMERA" };
     }
@@ -167,7 +217,7 @@ const I18N_DICT = {
     if (prevGray) {
       let diffSum = 0;
       for (let i = 0; i < n; i++) diffSum += Math.abs(gray[i] - prevGray[i]);
-      if (diffSum / n < 0.32) frozenStreak++;
+      if (diffSum / n < 0.30) frozenStreak++;
       else frozenStreak = 0;
     }
     prevGray = gray;
@@ -178,18 +228,56 @@ const I18N_DICT = {
     return { threat: false, reason: "SAFE" };
   }
 
-  // 1. Inject compact styling + muted pakda_gaya_meme.mp4
+  function evaluatePredictions(preds) {
+    if (!Array.isArray(preds) || preds.length === 0) return "";
+    const personPresent = preds.some((p) => p.class === "person" && p.score >= 0.30);
+    const frameArea = 320 * 240;
+
+    for (const p of preds) {
+      const cls = p.class;
+      const sc = p.score || 0;
+      const box = p.bbox || [0, 0, 0, 0];
+      const areaRatio = (box[2] * box[3]) / frameArea;
+
+      if (cls === "cell phone" && sc >= 0.14) {
+        return "CELL_PHONE_DETECTED_BROWSER_AI";
+      }
+      if (cls === "remote" && sc >= 0.22 && areaRatio < 0.45) {
+        return "HANDHELD_OPTICAL_DEVICE_DETECTED";
+      }
+      if (personPresent && cls === "book" && sc >= 0.28 && areaRatio < 0.40) {
+        return "HANDHELD_DEVICE_CASE_DETECTED";
+      }
+      if (personPresent && (cls === "tv" || cls === "laptop") && sc >= 0.32 && areaRatio < 0.35) {
+        return "HANDHELD_SCREEN_DETECTED";
+      }
+      if (personPresent && cls === "mouse" && sc >= 0.30 && areaRatio < 0.20) {
+        return "HANDHELD_CAMERA_LENS_DETECTED";
+      }
+    }
+    return "";
+  }
+
+  // 1. Inject transparent touch shield into viewport so mobile long-press never targets <img>
+  (function injectTouchShield() {
+    if (!viewport || document.getElementById("viewport-touch-shield")) return;
+    const shield = document.createElement("div");
+    shield.id = "viewport-touch-shield";
+    shield.className = "viewport-touch-shield";
+    viewport.appendChild(shield);
+  })();
+
+  // 2. Inject compact styling + muted pakda_gaya_meme.mp4
   (function setupHoneypotMemeVideo() {
     if (!document.getElementById("hg-meme-video-styles")) {
       const styleEl = document.createElement("style");
       styleEl.id = "hg-meme-video-styles";
       styleEl.textContent = `
         .hidden { display: none !important; }
-        .emoji-shield-overlay { padding: 12px 14px !important; overflow-y: auto; }
         .honeypot-meme-video {
           width: 100%;
-          max-width: 245px;
-          max-height: 146px;
+          max-width: 235px;
+          max-height: 138px;
           border-radius: 10px;
           border: 2px solid #f87171;
           background: #000;
@@ -199,11 +287,6 @@ const I18N_DICT = {
           box-shadow: 0 8px 22px rgba(0, 0, 0, 0.75);
           pointer-events: none;
         }
-        .meme-honeypot h2 { font-size: 1.0rem !important; margin: 2px 0 !important; line-height: 1.25; }
-        .reason-pill { padding: 3px 10px !important; font-size: 0.74rem !important; margin: 4px 0 !important; }
-        .emoji-shield-overlay .legal-warning-box { padding: 6px 10px !important; margin: 5px auto !important; }
-        .emoji-shield-overlay .legal-warning-box p { font-size: 0.69rem !important; line-height: 1.36 !important; }
-        .honeypot-sub { font-size: 0.7rem !important; margin: 4px auto 0 !important; }
       `;
       document.head.appendChild(styleEl);
     }
@@ -255,7 +338,7 @@ const I18N_DICT = {
     try { memeVideo.pause(); memeVideo.currentTime = 0; } catch (_) {}
   }
 
-  // 2. Permanent Cloud HTTPS Banner
+  // 3. Permanent Cloud HTTPS Banner
   (function injectCloudHttpsBar() {
     const waHub = document.getElementById("whatsapp-section");
     const tierGrid = waHub ? waHub.querySelector(".tier-grid") : null;
@@ -272,7 +355,7 @@ const I18N_DICT = {
     waHub.insertBefore(bar, tierGrid);
   })();
 
-  // 3. Weaver Studio PIN Unlock Bar
+  // 4. Weaver Studio PIN Unlock Bar
   (function injectWeaverPinBar() {
     const studio = document.getElementById("studio-section");
     const form = document.getElementById("protect-form");
@@ -290,7 +373,7 @@ const I18N_DICT = {
         id="weaver-pin-input"
         placeholder="Enter Weaver PIN"
         autocomplete="off"
-        style="flex:1; min-width:130px; background:#060a19; color:#fff; border:1px solid rgba(96,165,250,0.4); padding:6px 10px; border-radius:6px; font-size:0.78rem;"
+        style="flex:1; min-width:120px; background:#060a19; color:#fff; border:1px solid rgba(96,165,250,0.4); padding:6px 10px; border-radius:6px; font-size:0.78rem;"
       />
       <button type="button" id="btn-unlock-studio" class="btn-copy">🔓 Unlock Studio</button>
       <span id="weaver-pin-status" style="width:100%; font-size:0.72rem; color:${weaverPin ? "#34d399" : "#fbbf24"};">
@@ -345,6 +428,18 @@ const I18N_DICT = {
   }
   updateCameraButtonUI();
 
+  function syncStudioVideoDisplay() {
+    if (!studioVideoEl) return;
+    if (cameraHardwareEnabled && judgePipEnabled) {
+      studioVideoEl.className = "live-cam-pip";
+    } else if (cameraHardwareEnabled) {
+      // Offscreen (never display:none) so Chrome keeps decoding live 320x240 frames
+      studioVideoEl.className = "cam-offscreen";
+    } else {
+      studioVideoEl.className = "live-cam-pip hidden";
+    }
+  }
+
   async function stopBrowserCamera() {
     cameraHardwareEnabled = false;
     updateCameraButtonUI();
@@ -355,10 +450,11 @@ const I18N_DICT = {
     }
     if (studioVideoEl) {
       studioVideoEl.srcObject = null;
-      studioVideoEl.classList.add("hidden");
     }
+    syncStudioVideoDisplay();
     prevGray = null;
     frozenStreak = 0;
+    aiHoldUntil = 0;
     if (Date.now() >= manualHoldUntil) setEmojiShield(false, "CAMERA_PAUSED");
   }
 
@@ -379,11 +475,17 @@ const I18N_DICT = {
       if (!studioVideoEl && viewport) {
         studioVideoEl = document.createElement("video");
         studioVideoEl.id = "cloud-cam-pip";
-        studioVideoEl.className = "live-cam-pip hidden";
         studioVideoEl.autoplay = true;
         studioVideoEl.playsInline = true;
         studioVideoEl.muted = true;
+        studioVideoEl.width = 320;
+        studioVideoEl.height = 240;
         viewport.appendChild(studioVideoEl);
+      }
+      if (!aiCanvasEl) {
+        aiCanvasEl = document.createElement("canvas");
+        aiCanvasEl.width = 320;
+        aiCanvasEl.height = 240;
       }
       if (!liveCanvasEl) {
         liveCanvasEl = document.createElement("canvas");
@@ -393,19 +495,20 @@ const I18N_DICT = {
 
       if (studioVideoEl) {
         studioVideoEl.srcObject = studioStream;
-        studioVideoEl.classList.toggle("hidden", !judgePipEnabled);
+        syncStudioVideoDisplay();
         await studioVideoEl.play();
       }
 
       const track = studioStream.getVideoTracks()[0];
       if (track) track.onended = () => stopBrowserCamera();
 
+      if (valCamDiag) { valCamDiag.textContent = "⏳ LOADING PHONE AI (~4s)..."; valCamDiag.style.color = "#7dd3fc"; }
       await ensureBrowserAI();
       runBrowserVisionLoop();
     } catch (_) {
       cameraHardwareEnabled = false;
       updateCameraButtonUI();
-      alert("Camera permission denied or no webcam found. 95px Spotlight + 8×8 Cloak remain active.");
+      alert("Camera permission denied or no webcam found. Spotlight + 8×8 Cloak remain active.");
     }
   }
 
@@ -416,32 +519,33 @@ const I18N_DICT = {
       scanInFlight = true;
       const t0 = performance.now();
       try {
-        const liveCheck = checkStudioLiveness();
+        const aiCtx = aiCanvasEl.getContext("2d", { willReadFrequently: true });
+        aiCtx.drawImage(studioVideoEl, 0, 0, 320, 240);
+
+        const liveCheck = checkStudioLivenessFromCanvas();
         let threatReason = liveCheck.threat ? liveCheck.reason : "";
 
         if (!threatReason && cocoModel) {
-          const preds = await cocoModel.detect(studioVideoEl, 8, 0.24);
-          const personPresent = preds.some((p) => p.class === "person" && p.score >= 0.35);
-          for (const p of preds) {
-            if (p.class === "cell phone" && p.score >= 0.25) {
-              threatReason = "CELL_PHONE_DETECTED_BROWSER_AI";
-              break;
-            }
-            if (personPresent && (p.class === "remote" || p.class === "book") && p.score >= 0.45) {
-              threatReason = "HANDHELD_OPTICAL_DEVICE_DETECTED";
-              break;
-            }
-          }
+          const preds = await cocoModel.detect(aiCanvasEl, 15, 0.14);
+          threatReason = evaluatePredictions(preds);
+        }
+
+        const now = Date.now();
+        if (threatReason) {
+          aiHoldUntil = now + 2500;
+          lastAiThreatReason = threatReason;
+        } else if (now < aiHoldUntil) {
+          threatReason = lastAiThreatReason;
         }
 
         const ms = Math.round(performance.now() - t0);
         if (valLatency) valLatency.textContent = ms + " ms";
-        if (valDetector) valDetector.textContent = cocoModel ? "Browser TF.js COCO-SSD" : "Browser Liveness Guard";
+        if (valDetector) valDetector.textContent = cocoModel ? aiModelLabel : "Browser Liveness Only";
 
         if (cameraHardwareEnabled) {
           setEmojiShield(Boolean(threatReason), threatReason || "SAFE_VIEWER_VERIFIED");
-          if (threatReason && Date.now() - lastAiLogTs > 4000) {
-            lastAiLogTs = Date.now();
+          if (threatReason && now - lastAiLogTs > 4000) {
+            lastAiLogTs = now;
             fetch("/api/log-breach", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -456,11 +560,12 @@ const I18N_DICT = {
     }
 
     if (cameraHardwareEnabled) {
-      scanTimer = setTimeout(runBrowserVisionLoop, 280);
+      scanTimer = setTimeout(runBrowserVisionLoop, 220);
     }
   }
 
   window.addEventListener("pagehide", () => { stopBrowserCamera(); stopMemeVideo(); });
+  window.addEventListener("blur", shutSpotlight);
 
   window.toggleCameraPower = async function () {
     if (cameraHardwareEnabled) await stopBrowserCamera();
@@ -471,9 +576,7 @@ const I18N_DICT = {
     judgePipEnabled = !judgePipEnabled;
     const btn = document.getElementById("btn-pip-toggle");
     if (btn) btn.textContent = judgePipEnabled ? "👁️ Judge Cam: ON" : "👁️ Judge Cam: OFF";
-    if (studioVideoEl) {
-      studioVideoEl.classList.toggle("hidden", !(judgePipEnabled && cameraHardwareEnabled));
-    }
+    syncStudioVideoDisplay();
     if (judgePipEnabled && !cameraHardwareEnabled) startBrowserCamera();
   };
 
@@ -507,7 +610,7 @@ const I18N_DICT = {
     const msgStandard =
       `🪷 *Heritage-Guard | Tier-2 Catalog Preview Link*\n` +
       `GI Saree: *${assetLabel}*\n` +
-      `🛡️ *Locked Buyer-Only Preview (95px Spotlight + 8x8 Zari Cloak):*\n\n` +
+      `🛡️ *Locked Buyer-Only Preview (Adaptive Spotlight + 8x8 Zari Cloak):*\n\n` +
       `${standardUrl}\n\n` +
       `⚖️ _Protected under Sec 51 & 63 Copyright Act 1957 & Sec 22 Designs Act 2000._`;
 
@@ -562,6 +665,7 @@ const I18N_DICT = {
     if (!viewport || !emojiOverlay) return;
 
     if (locked) {
+      shutSpotlight();
       viewport.classList.add("threat-locked");
       emojiOverlay.classList.remove("hidden");
       if (!memeOverlayVisible) { memeOverlayVisible = true; startMemeVideo(); }
@@ -577,13 +681,13 @@ const I18N_DICT = {
       if (memeOverlayVisible) { memeOverlayVisible = false; stopMemeVideo(); }
       if (statusBadge) {
         statusBadge.textContent = cameraHardwareEnabled
-          ? "🛡️ ON-DEVICE AI GUARD ONLINE"
+          ? (cocoModel ? "🛡️ BROWSER AI GUARD ONLINE" : "🛡️ LIVENESS GUARD ONLINE")
           : "🛡️ CLOUD SPOTLIGHT ACTIVE";
         statusBadge.className = "pill pill-safe";
       }
       if (valCamDiag) {
         valCamDiag.textContent = cameraHardwareEnabled
-          ? "SAFE (ON-DEVICE AI ACTIVE)"
+          ? (cocoModel ? "SAFE (AI PHONE GUARD ACTIVE)" : "SAFE (LIVENESS ONLY)")
           : "CAM OFF (CLICK TO ENABLE)";
         valCamDiag.style.color = "#34d399";
       }
@@ -653,20 +757,59 @@ const I18N_DICT = {
     if (btn) btn.textContent = heatmapMode ? "🖼️ Protected Weave View" : "🔥 8×8 DCT Heatmap";
   };
 
+  function moveSpotlight(clientX, clientY) {
+    if (shieldLocked || !viewport || !clearLayer) return;
+    const rect = viewport.getBoundingClientRect();
+    const r = getSpotlightRadius();
+    clearLayer.style.clipPath = `circle(${r}px at ${clientX - rect.left}px ${clientY - rect.top}px)`;
+  }
+
+  function clearLongPress() {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
+
   if (viewport && clearLayer) {
-    viewport.addEventListener("mousemove", (e) => {
-      if (shieldLocked) return;
-      const rect = viewport.getBoundingClientRect();
-      clearLayer.style.clipPath = `circle(${SPOTLIGHT_RADIUS_PX}px at ${e.clientX - rect.left}px ${e.clientY - rect.top}px)`;
-    });
+    viewport.addEventListener("mousemove", (e) => moveSpotlight(e.clientX, e.clientY));
+    viewport.addEventListener("mouseleave", shutSpotlight);
+
+    viewport.addEventListener("touchstart", (e) => {
+      if (shieldLocked || !e.touches || !e.touches[0]) return;
+      e.preventDefault();
+      const t = e.touches[0];
+      touchStartX = t.clientX;
+      touchStartY = t.clientY;
+      moveSpotlight(t.clientX, t.clientY);
+      clearLongPress();
+      longPressTimer = setTimeout(() => {
+        reportFrontendBreach("MOBILE_LONG_PRESS_COPY_BLOCKED");
+      }, 550);
+    }, { passive: false });
+
     viewport.addEventListener("touchmove", (e) => {
       if (shieldLocked || !e.touches || !e.touches[0]) return;
-      const rect = viewport.getBoundingClientRect();
-      clearLayer.style.clipPath = `circle(${SPOTLIGHT_RADIUS_PX}px at ${e.touches[0].clientX - rect.left}px ${e.touches[0].clientY - rect.top}px)`;
-    }, { passive: true });
-    viewport.addEventListener("mouseleave", () => { clearLayer.style.clipPath = "circle(0px at 50% 50%)"; });
-    viewport.addEventListener("contextmenu", (e) => { e.preventDefault(); reportFrontendBreach("RIGHT_CLICK_COPY_ATTEMPT_SEC51_63"); });
-    viewport.addEventListener("dragstart", (e) => { e.preventDefault(); reportFrontendBreach("IMAGE_DRAG_COPY_ATTEMPT_SEC22"); });
+      e.preventDefault();
+      const t = e.touches[0];
+      if (Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY) > 12) {
+        clearLongPress();
+      }
+      moveSpotlight(t.clientX, t.clientY);
+    }, { passive: false });
+
+    // Critical anti-screenshot defense: snap blur completely shut the instant finger lifts
+    viewport.addEventListener("touchend", () => { clearLongPress(); shutSpotlight(); });
+    viewport.addEventListener("touchcancel", () => { clearLongPress(); shutSpotlight(); });
+
+    viewport.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      reportFrontendBreach("RIGHT_CLICK_COPY_ATTEMPT_SEC51_63");
+    });
+    viewport.addEventListener("dragstart", (e) => {
+      e.preventDefault();
+      reportFrontendBreach("IMAGE_DRAG_COPY_ATTEMPT_SEC22");
+    });
   }
 
   document.addEventListener("copy", (e) => {
@@ -868,7 +1011,7 @@ const I18N_DICT = {
     } catch (_) {}
   };
 
-  if (valDetector) valDetector.textContent = "Browser TF.js COCO-SSD";
+  if (valDetector) valDetector.textContent = "Browser MobileNetV2 AI";
   setEmojiShield(false);
   window.refreshAuditLogs();
   setInterval(window.refreshAuditLogs, 4000);
