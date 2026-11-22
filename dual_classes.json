@@ -1,0 +1,187 @@
+{
+  "imgsz": 320,
+  "yolov10": {
+    "output_shape": [
+      1,
+      84,
+      2100
+    ],
+    "direct": [
+      {
+        "id": 67,
+        "name": "cell phone",
+        "reason": "CELL_PHONE_DETECTED_V10",
+        "conf": 0.16,
+        "max_area": 1.0
+      },
+      {
+        "id": 65,
+        "name": "remote",
+        "reason": "HANDHELD_OPTICAL_DEVICE_V10",
+        "conf": 0.24,
+        "max_area": 0.45
+      }
+    ],
+    "proxy": [
+      {
+        "id": 73,
+        "name": "book",
+        "reason": "HANDHELD_DEVICE_CASE_V10",
+        "conf": 0.3,
+        "max_area": 0.38
+      },
+      {
+        "id": 63,
+        "name": "laptop",
+        "reason": "HANDHELD_SCREEN_V10",
+        "conf": 0.34,
+        "max_area": 0.36
+      },
+      {
+        "id": 62,
+        "name": "tv",
+        "reason": "HANDHELD_SCREEN_V10",
+        "conf": 0.34,
+        "max_area": 0.36
+      },
+      {
+        "id": 64,
+        "name": "mouse",
+        "reason": "HANDHELD_CAMERA_LENS_V10",
+        "conf": 0.3,
+        "max_area": 0.22
+      }
+    ],
+    "person_ids": [
+      0
+    ]
+  },
+  "oiv7": {
+    "output_shape": [
+      1,
+      605,
+      2100
+    ],
+    "direct": [
+      {
+        "id": 339,
+        "name": "Mobile phone",
+        "reason": "CELL_PHONE_DETECTED_OIV7",
+        "conf": 0.16,
+        "max_area": 1.0
+      },
+      {
+        "id": 82,
+        "name": "Camera",
+        "reason": "CAMERA_OR_DSLR_DETECTED_OIV7",
+        "conf": 0.16,
+        "max_area": 1.0
+      },
+      {
+        "id": 516,
+        "name": "Tablet computer",
+        "reason": "TABLET_CAMERA_DETECTED_OIV7",
+        "conf": 0.2,
+        "max_area": 1.0
+      },
+      {
+        "id": 526,
+        "name": "Telephone",
+        "reason": "TELEPHONE_DEVICE_DETECTED_OIV7",
+        "conf": 0.2,
+        "max_area": 1.0
+      },
+      {
+        "id": 134,
+        "name": "Corded phone",
+        "reason": "TELEPHONE_DEVICE_DETECTED_OIV7",
+        "conf": 0.24,
+        "max_area": 1.0
+      },
+      {
+        "id": 278,
+        "name": "Ipod",
+        "reason": "HANDHELD_MEDIA_DEVICE_OIV7",
+        "conf": 0.2,
+        "max_area": 0.55
+      },
+      {
+        "id": 420,
+        "name": "Remote control",
+        "reason": "HANDHELD_OPTICAL_DEVICE_OIV7",
+        "conf": 0.24,
+        "max_area": 0.5
+      },
+      {
+        "id": 48,
+        "name": "Binoculars",
+        "reason": "OPTICAL_LENS_DETECTED_OIV7",
+        "conf": 0.24,
+        "max_area": 0.65
+      },
+      {
+        "id": 555,
+        "name": "Tripod",
+        "reason": "CAMERA_TRIPOD_DETECTED_OIV7",
+        "conf": 0.28,
+        "max_area": 0.85
+      }
+    ],
+    "proxy": [
+      {
+        "id": 54,
+        "name": "Book",
+        "reason": "HANDHELD_DEVICE_CASE_OIV7",
+        "conf": 0.34,
+        "max_area": 0.38
+      },
+      {
+        "id": 80,
+        "name": "Calculator",
+        "reason": "HANDHELD_DEVICE_DETECTED_OIV7",
+        "conf": 0.3,
+        "max_area": 0.35
+      },
+      {
+        "id": 304,
+        "name": "Laptop",
+        "reason": "HANDHELD_SCREEN_OIV7",
+        "conf": 0.36,
+        "max_area": 0.36
+      },
+      {
+        "id": 128,
+        "name": "Computer monitor",
+        "reason": "HANDHELD_SCREEN_OIV7",
+        "conf": 0.36,
+        "max_area": 0.36
+      },
+      {
+        "id": 527,
+        "name": "Television",
+        "reason": "HANDHELD_SCREEN_OIV7",
+        "conf": 0.36,
+        "max_area": 0.36
+      },
+      {
+        "id": 129,
+        "name": "Computer mouse",
+        "reason": "HANDHELD_CAMERA_LENS_OIV7",
+        "conf": 0.32,
+        "max_area": 0.22
+      }
+    ],
+    "person_ids": [
+      381,
+      322,
+      594,
+      63,
+      216,
+      261,
+      268
+    ],
+    "face_ids": [
+      264
+    ]
+  }
+}

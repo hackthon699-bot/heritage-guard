@@ -1,12 +1,11 @@
 /**
- * Heritage-Guard v4.3 | Render Cloud Edition: spotlight_shield.js (v4.3)
- * Fixes & Upgrades:
- *  - Upgrades on-device browser AI to full MobileNetV2 COCO-SSD (dual-CDN + CPU fallback)
- *    reading from an active 320x240 canvas (fixes mobile Chrome/Safari blank-texture misses)
- *  - Adds 2.5s sticky threat hold + lowered phone & proxy-device thresholds for reliable locks
- *  - Responsive spotlight radius (~45-50px on phones, 95px on desktop)
- *  - Instant touchend / touchcancel snap-shut so lifting a finger to screenshot shows 100% blur
- *  - Transparent touch shield + 550ms stationary long-press copy trap on phones
+ * Heritage-Guard v4.5.1 | Render Cloud Edition: spotlight_shield.js (v4.5.1)
+ * - Uses shared window.HGVisionEngine from dual_vision.js (Alternating YOLOv10n + YOLOv8n-OIV7,
+ *   calibrated 2-10 cm Laplacian Defocus Trap, Privacy Shutter & Continuous Face-Occlusion)
+ * - Adaptive CPU pacing (260 ms on Ryzen 3 / budget phones, 180 ms on faster CPUs)
+ * - Adaptive Spotlight Aperture (~45-50px on phones, 95px on desktop) + instant touchend snap-shut
+ * - Transparent touch shield + 550ms mobile long-press copy trap
+ * - Weaver Studio PIN lock protects /api/protect while keeping Verifier & Audit Vault open
  */
 
 const STATUTORY_PLAIN_TEXT =
@@ -17,7 +16,7 @@ const I18N_DICT = {
     title: 'Heritage Guard <span class="gold-version">v4.2</span>',
     catalogHeading: "B2B BUYER INSPECTION GATE — Interactive Spotlight & Optical Shield",
     catalogHelp:
-      "Move your cursor or slide your finger inside the protected frame to inspect threads through the adaptive Spotlight Aperture. Lifting your finger snaps the blur shut; long-pressing, copying, or raising a phone triggers an instant 0ms PAKDA GAYA! statutory lockout.",
+      "Move your cursor or slide your finger inside the protected frame to inspect threads through the adaptive Spotlight Aperture. Lifting your finger snaps the blur shut; covering the lens, long-pressing, or raising a phone, tablet, or camera triggers an instant 0ms PAKDA GAYA! statutory lockout.",
     uploadHeading: "🛡️ ARTISAN COOPERATIVE STUDIO — Zero-Retention RAM Cloak",
     verifyHeading: "🔎 FORENSIC 3-ZONE LSB & SQL GI VERIFIER",
     auditHeading: "📋 SQL SECURITY BREACH & AUDIT VAULT",
@@ -35,7 +34,7 @@ const I18N_DICT = {
     title: 'హెరిటేజ్-గార్డ్ <span class="gold-version">v4.2</span>',
     catalogHeading: "B2B కొనుగోలుదారు స్పాట్‌లైట్ వ్యూపోర్ట్ & కెమెరా రక్షణ కవచం",
     catalogHelp:
-      "స్పాట్‌లైట్ ద్వారా చేనేత జరి మరియు ఇకత్ డిజైన్‌ను పరిశీలించండి. వేలు ఎత్తగానే చిత్రం మసకబారుతుంది; కాపీ, లాంగ్-ప్రెస్ లేదా ఫోన్/కెమెరా పైకి ఎత్తితే 0ms లో స్క్రీన్ లాక్ అవుతుంది.",
+      "స్పాట్‌లైట్ ద్వారా చేనేత జరి మరియు ఇకత్ డిజైన్‌ను పరిశీలించండి. వేలు ఎత్తగానే చిత్రం మసకబారుతుంది; చేయి అడ్డుపెట్టడం, కాపీ లేదా ఫోన్/టాబ్లెట్/కెమెరా పైకి ఎత్తితే 0ms లో స్క్రీన్ లాక్ అవుతుంది.",
     uploadHeading: "🛡️ చేనేత సహకార స్టూడియో — జీరో-రిటెన్షన్ RAM క్లోక్",
     verifyHeading: "🔎 3-జోన్ LSB & GI యాజమాన్య నిర్ధారణ",
     auditHeading: "📋 భద్రతా ఆడిట్ లాగ్స్ (SQL వాల్ట్)",
@@ -53,7 +52,7 @@ const I18N_DICT = {
     title: 'हेरिटेज-गार्ड <span class="gold-version">v4.2</span>',
     catalogHeading: "B2B खरीदार स्पॉटलाइट निरीक्षण गेट और ऑप्टिकल सुरक्षा कवच",
     catalogHelp:
-      "स्पॉटलाइट के माध्यम से ज़री और इकत बुनाई का निरीक्षण करें। उंगली हटाते ही छवि तुरंत धुंधली हो जाती है; कॉपी, लॉन्ग-प्रेस या फ़ोन उठाने पर 0ms में स्क्रीन लॉक हो जाती है।",
+      "स्पॉटलाइट के माध्यम से ज़री और इकत बुनाई का निरीक्षण करें। उंगली हटाते ही छवि तुरंत धुंधली हो जाती है; कैमरे पर हाथ रखने, कॉपी या फ़ोन/टैबलेट/कैमरा उठाने पर 0ms में स्क्रीन लॉक हो जाती है।",
     uploadHeading: "🛡️ बुनकर सहकारी स्टूडियो — जीरो-रिटेंशन RAM क्लोक",
     verifyHeading: "🔎 फॉरेंसिक 3-ज़ोन LSB और SQL GI सत्यापन",
     auditHeading: "📋 SQL सुरक्षा उल्लंघन और ऑडिट वॉल्ट",
@@ -70,11 +69,14 @@ const I18N_DICT = {
 };
 
 (function () {
+  const visionSession = window.HGVisionEngine ? window.HGVisionEngine.createSession() : null;
+  const scanIntervalMs = (window.HGVisionEngine && window.HGVisionEngine.recommendedIntervalMs)
+    ? window.HGVisionEngine.recommendedIntervalMs()
+    : 240;
+
   let shieldLocked = false;
   let memeOverlayVisible = false;
   let manualHoldUntil = 0;
-  let aiHoldUntil = 0;
-  let lastAiThreatReason = "CELL_PHONE_DETECTED_BROWSER_AI";
   let lastAiLogTs = 0;
   let toastTimeoutId = null;
   let flickerPhase = 0;
@@ -86,14 +88,8 @@ const I18N_DICT = {
 
   let studioStream = null;
   let studioVideoEl = null;
-  let aiCanvasEl = null;
-  let liveCanvasEl = null;
   let scanTimer = null;
   let scanInFlight = false;
-  let cocoModel = null;
-  let aiModelLabel = "Browser MobileNetV2";
-  let prevGray = null;
-  let frozenStreak = 0;
   let memeVideo = null;
   let weaverPin = "";
 
@@ -133,131 +129,6 @@ const I18N_DICT = {
     if (clearLayer) clearLayer.style.clipPath = "circle(0px at 50% 50%)";
   }
 
-  function loadScriptWithFallback(urls) {
-    return new Promise((resolve, reject) => {
-      let idx = 0;
-      function tryNext() {
-        if (idx >= urls.length) {
-          reject(new Error("All script CDNs failed"));
-          return;
-        }
-        const s = document.createElement("script");
-        s.src = urls[idx++];
-        s.async = true;
-        s.onload = resolve;
-        s.onerror = tryNext;
-        document.head.appendChild(s);
-      }
-      tryNext();
-    });
-  }
-
-  async function ensureBrowserAI() {
-    if (cocoModel) return cocoModel;
-    try {
-      if (valDetector) valDetector.textContent = "⏳ Loading Browser AI...";
-      if (!window.tf) {
-        await loadScriptWithFallback([
-          "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js",
-          "https://unpkg.com/@tensorflow/tfjs@4.22.0/dist/tf.min.js",
-        ]);
-      }
-      if (!window.cocoSsd) {
-        await loadScriptWithFallback([
-          "https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js",
-          "https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js",
-        ]);
-      }
-      if (window.tf && window.tf.ready) {
-        await window.tf.ready();
-        if (window.tf.getBackend() !== "webgl") {
-          try { await window.tf.setBackend("webgl"); } catch (_) {
-            try { await window.tf.setBackend("cpu"); } catch (__) {}
-          }
-        }
-      }
-      try {
-        cocoModel = await window.cocoSsd.load({ base: "mobilenet_v2" });
-        aiModelLabel = "Browser MobileNetV2 AI";
-      } catch (_) {
-        cocoModel = await window.cocoSsd.load({ base: "lite_mobilenet_v2" });
-        aiModelLabel = "Browser Lite-MobileNet AI";
-      }
-      if (valDetector) valDetector.textContent = aiModelLabel + " (Ready)";
-      return cocoModel;
-    } catch (_) {
-      if (valDetector) valDetector.textContent = "Liveness Guard (AI CDN Blocked)";
-      return null;
-    }
-  }
-
-  function checkStudioLivenessFromCanvas() {
-    const ctx = liveCanvasEl.getContext("2d", { willReadFrequently: true });
-    ctx.drawImage(aiCanvasEl, 0, 0, 96, 72);
-    const data = ctx.getImageData(0, 0, 96, 72).data;
-    const n = 96 * 72;
-    const gray = new Uint8Array(n);
-    let sum = 0;
-    let sumSq = 0;
-
-    for (let i = 0, p = 0; i < n; i++, p += 4) {
-      const y = (data[p] * 77 + data[p + 1] * 150 + data[p + 2] * 29) >> 8;
-      gray[i] = y;
-      sum += y;
-      sumSq += y * y;
-    }
-
-    const mean = sum / n;
-    const std = Math.sqrt(Math.max(0, (sumSq / n) - (mean * mean)));
-    if (mean < 16.0 || std < 7.5) {
-      prevGray = gray;
-      return { threat: true, reason: "PRIVACY_SHUTTER_OR_COVERED_CAMERA" };
-    }
-
-    if (prevGray) {
-      let diffSum = 0;
-      for (let i = 0; i < n; i++) diffSum += Math.abs(gray[i] - prevGray[i]);
-      if (diffSum / n < 0.30) frozenStreak++;
-      else frozenStreak = 0;
-    }
-    prevGray = gray;
-
-    if (frozenStreak >= 4) {
-      return { threat: true, reason: "PRIVACY_SHUTTER_OR_FROZEN_CAMERA" };
-    }
-    return { threat: false, reason: "SAFE" };
-  }
-
-  function evaluatePredictions(preds) {
-    if (!Array.isArray(preds) || preds.length === 0) return "";
-    const personPresent = preds.some((p) => p.class === "person" && p.score >= 0.30);
-    const frameArea = 320 * 240;
-
-    for (const p of preds) {
-      const cls = p.class;
-      const sc = p.score || 0;
-      const box = p.bbox || [0, 0, 0, 0];
-      const areaRatio = (box[2] * box[3]) / frameArea;
-
-      if (cls === "cell phone" && sc >= 0.14) {
-        return "CELL_PHONE_DETECTED_BROWSER_AI";
-      }
-      if (cls === "remote" && sc >= 0.22 && areaRatio < 0.45) {
-        return "HANDHELD_OPTICAL_DEVICE_DETECTED";
-      }
-      if (personPresent && cls === "book" && sc >= 0.28 && areaRatio < 0.40) {
-        return "HANDHELD_DEVICE_CASE_DETECTED";
-      }
-      if (personPresent && (cls === "tv" || cls === "laptop") && sc >= 0.32 && areaRatio < 0.35) {
-        return "HANDHELD_SCREEN_DETECTED";
-      }
-      if (personPresent && cls === "mouse" && sc >= 0.30 && areaRatio < 0.20) {
-        return "HANDHELD_CAMERA_LENS_DETECTED";
-      }
-    }
-    return "";
-  }
-
   // 1. Inject transparent touch shield into viewport so mobile long-press never targets <img>
   (function injectTouchShield() {
     if (!viewport || document.getElementById("viewport-touch-shield")) return;
@@ -267,7 +138,7 @@ const I18N_DICT = {
     viewport.appendChild(shield);
   })();
 
-  // 2. Inject compact styling + muted pakda_gaya_meme.mp4
+  // 2. Inject muted pakda_gaya_meme.mp4 into lockout overlay
   (function setupHoneypotMemeVideo() {
     if (!document.getElementById("hg-meme-video-styles")) {
       const styleEl = document.createElement("style");
@@ -351,7 +222,7 @@ const I18N_DICT = {
       "border:1px solid rgba(52,211,153,0.45); border-radius:8px; font-size:0.78rem; color:#34d399; word-break:break-all;";
     bar.innerHTML =
       `✅ <strong>Permanent Cloud HTTPS Active:</strong> <code>${window.location.origin}</code> — ` +
-      `WhatsApp Buyer-Only links stay live 24/7 with On-Device Browser AI even when your laptop is OFF.`;
+      `WhatsApp Buyer-Only links stay live 24/7 with Alternating YOLOv10n + YOLOv8n-OIV7 Browser AI.`;
     waHub.insertBefore(bar, tierGrid);
   })();
 
@@ -423,8 +294,8 @@ const I18N_DICT = {
   function updateCameraButtonUI() {
     if (!cameraPowerBtn) return;
     cameraPowerBtn.textContent = cameraHardwareEnabled
-      ? "📷 Browser AI Cam: ON"
-      : "📷 Browser AI Cam: OFF";
+      ? "📷 Dual AI Cam: ON"
+      : "📷 Dual AI Cam: OFF";
   }
   updateCameraButtonUI();
 
@@ -433,7 +304,6 @@ const I18N_DICT = {
     if (cameraHardwareEnabled && judgePipEnabled) {
       studioVideoEl.className = "live-cam-pip";
     } else if (cameraHardwareEnabled) {
-      // Offscreen (never display:none) so Chrome keeps decoding live 320x240 frames
       studioVideoEl.className = "cam-offscreen";
     } else {
       studioVideoEl.className = "live-cam-pip hidden";
@@ -448,13 +318,9 @@ const I18N_DICT = {
       try { studioStream.getTracks().forEach((t) => t.stop()); } catch (_) {}
       studioStream = null;
     }
-    if (studioVideoEl) {
-      studioVideoEl.srcObject = null;
-    }
+    if (studioVideoEl) studioVideoEl.srcObject = null;
     syncStudioVideoDisplay();
-    prevGray = null;
-    frozenStreak = 0;
-    aiHoldUntil = 0;
+    if (visionSession) visionSession.reset();
     if (Date.now() >= manualHoldUntil) setEmojiShield(false, "CAMERA_PAUSED");
   }
 
@@ -464,7 +330,7 @@ const I18N_DICT = {
       return;
     }
     try {
-      if (valCamDiag) { valCamDiag.textContent = "⏳ STARTING CAM & AI..."; valCamDiag.style.color = "#7dd3fc"; }
+      if (valCamDiag) { valCamDiag.textContent = "⏳ STARTING CAM..."; valCamDiag.style.color = "#7dd3fc"; }
       studioStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 320 }, height: { ideal: 240 } },
         audio: false,
@@ -482,16 +348,6 @@ const I18N_DICT = {
         studioVideoEl.height = 240;
         viewport.appendChild(studioVideoEl);
       }
-      if (!aiCanvasEl) {
-        aiCanvasEl = document.createElement("canvas");
-        aiCanvasEl.width = 320;
-        aiCanvasEl.height = 240;
-      }
-      if (!liveCanvasEl) {
-        liveCanvasEl = document.createElement("canvas");
-        liveCanvasEl.width = 96;
-        liveCanvasEl.height = 72;
-      }
 
       if (studioVideoEl) {
         studioVideoEl.srcObject = studioStream;
@@ -502,8 +358,13 @@ const I18N_DICT = {
       const track = studioStream.getVideoTracks()[0];
       if (track) track.onended = () => stopBrowserCamera();
 
-      if (valCamDiag) { valCamDiag.textContent = "⏳ LOADING PHONE AI (~4s)..."; valCamDiag.style.color = "#7dd3fc"; }
-      await ensureBrowserAI();
+      if (window.HGVisionEngine) {
+        await window.HGVisionEngine.init((msg) => {
+          if (valCamDiag) { valCamDiag.textContent = msg; valCamDiag.style.color = "#7dd3fc"; }
+          if (valDetector) valDetector.textContent = msg;
+        });
+      }
+
       runBrowserVisionLoop();
     } catch (_) {
       cameraHardwareEnabled = false;
@@ -513,43 +374,23 @@ const I18N_DICT = {
   }
 
   async function runBrowserVisionLoop() {
-    if (!cameraHardwareEnabled || !studioStream || !studioVideoEl) return;
+    if (!cameraHardwareEnabled || !studioStream || !studioVideoEl || !visionSession) return;
 
     if (!scanInFlight && studioVideoEl.readyState >= 2 && studioVideoEl.videoWidth > 0) {
       scanInFlight = true;
-      const t0 = performance.now();
       try {
-        const aiCtx = aiCanvasEl.getContext("2d", { willReadFrequently: true });
-        aiCtx.drawImage(studioVideoEl, 0, 0, 320, 240);
-
-        const liveCheck = checkStudioLivenessFromCanvas();
-        let threatReason = liveCheck.threat ? liveCheck.reason : "";
-
-        if (!threatReason && cocoModel) {
-          const preds = await cocoModel.detect(aiCanvasEl, 15, 0.14);
-          threatReason = evaluatePredictions(preds);
-        }
-
-        const now = Date.now();
-        if (threatReason) {
-          aiHoldUntil = now + 2500;
-          lastAiThreatReason = threatReason;
-        } else if (now < aiHoldUntil) {
-          threatReason = lastAiThreatReason;
-        }
-
-        const ms = Math.round(performance.now() - t0);
-        if (valLatency) valLatency.textContent = ms + " ms";
-        if (valDetector) valDetector.textContent = cocoModel ? aiModelLabel : "Browser Liveness Only";
+        const res = await visionSession.scan(studioVideoEl);
+        if (valLatency) valLatency.textContent = res.latency_ms + " ms";
+        if (valDetector) valDetector.textContent = res.detector;
 
         if (cameraHardwareEnabled) {
-          setEmojiShield(Boolean(threatReason), threatReason || "SAFE_VIEWER_VERIFIED");
-          if (threatReason && now - lastAiLogTs > 4000) {
-            lastAiLogTs = now;
+          setEmojiShield(Boolean(res.threat_detected), res.reason || "THREAT_DETECTED");
+          if (res.threat_detected && Date.now() - lastAiLogTs > 4000) {
+            lastAiLogTs = Date.now();
             fetch("/api/log-breach", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ reason: threatReason }),
+              body: JSON.stringify({ reason: res.reason }),
             }).then(() => window.refreshAuditLogs()).catch(() => {});
           }
         }
@@ -560,7 +401,7 @@ const I18N_DICT = {
     }
 
     if (cameraHardwareEnabled) {
-      scanTimer = setTimeout(runBrowserVisionLoop, 220);
+      scanTimer = setTimeout(runBrowserVisionLoop, scanIntervalMs);
     }
   }
 
@@ -679,15 +520,16 @@ const I18N_DICT = {
       viewport.classList.remove("threat-locked");
       emojiOverlay.classList.add("hidden");
       if (memeOverlayVisible) { memeOverlayVisible = false; stopMemeVideo(); }
+      const detLabel = window.HGVisionEngine ? window.HGVisionEngine.getDetectorLabel() : "Dual YOLOv10n + OIV7";
       if (statusBadge) {
         statusBadge.textContent = cameraHardwareEnabled
-          ? (cocoModel ? "🛡️ BROWSER AI GUARD ONLINE" : "🛡️ LIVENESS GUARD ONLINE")
+          ? "🛡️ " + detLabel.toUpperCase()
           : "🛡️ CLOUD SPOTLIGHT ACTIVE";
         statusBadge.className = "pill pill-safe";
       }
       if (valCamDiag) {
         valCamDiag.textContent = cameraHardwareEnabled
-          ? (cocoModel ? "SAFE (AI PHONE GUARD ACTIVE)" : "SAFE (LIVENESS ONLY)")
+          ? "SAFE (" + detLabel + ")"
           : "CAM OFF (CLICK TO ENABLE)";
         valCamDiag.style.color = "#34d399";
       }
@@ -765,10 +607,7 @@ const I18N_DICT = {
   }
 
   function clearLongPress() {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
+    if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
   }
 
   if (viewport && clearLayer) {
@@ -792,24 +631,15 @@ const I18N_DICT = {
       if (shieldLocked || !e.touches || !e.touches[0]) return;
       e.preventDefault();
       const t = e.touches[0];
-      if (Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY) > 12) {
-        clearLongPress();
-      }
+      if (Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY) > 12) clearLongPress();
       moveSpotlight(t.clientX, t.clientY);
     }, { passive: false });
 
-    // Critical anti-screenshot defense: snap blur completely shut the instant finger lifts
     viewport.addEventListener("touchend", () => { clearLongPress(); shutSpotlight(); });
     viewport.addEventListener("touchcancel", () => { clearLongPress(); shutSpotlight(); });
 
-    viewport.addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      reportFrontendBreach("RIGHT_CLICK_COPY_ATTEMPT_SEC51_63");
-    });
-    viewport.addEventListener("dragstart", (e) => {
-      e.preventDefault();
-      reportFrontendBreach("IMAGE_DRAG_COPY_ATTEMPT_SEC22");
-    });
+    viewport.addEventListener("contextmenu", (e) => { e.preventDefault(); reportFrontendBreach("RIGHT_CLICK_COPY_ATTEMPT_SEC51_63"); });
+    viewport.addEventListener("dragstart", (e) => { e.preventDefault(); reportFrontendBreach("IMAGE_DRAG_COPY_ATTEMPT_SEC22"); });
   }
 
   document.addEventListener("copy", (e) => {
@@ -1011,7 +841,7 @@ const I18N_DICT = {
     } catch (_) {}
   };
 
-  if (valDetector) valDetector.textContent = "Browser MobileNetV2 AI";
+  if (valDetector) valDetector.textContent = "Dual YOLOv10n + YOLOv8n-OIV7";
   setEmojiShield(false);
   window.refreshAuditLogs();
   setInterval(window.refreshAuditLogs, 4000);

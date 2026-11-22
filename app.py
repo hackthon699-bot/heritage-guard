@@ -1,11 +1,11 @@
 """
-Heritage-Guard | Render Cloud Edition: app.py (v3.3 - Mobile AI Fix + Snap-Shut + Cache-Bust v4.3)
+Heritage-Guard | Render Cloud Edition: app.py (v3.5.1 - Alternating YOLOv10n + YOLOv8n-OIV7)
 Optimized for Render Free Tier (512 MB RAM, ₹0, no credit card):
-  - Lightweight Flask + OpenCV-Headless backend (~120 MB RAM)
-  - Buyer-Only Mode uses active 320x240 canvas -> Full MobileNetV2 COCO-SSD + 2.5s sticky hold
-  - Responsive spotlight (~45-50px on phones, 95px on desktop) + instant touchend snap-shut
-  - Transparent touch shield + 550ms long-press mobile copy trap
-  - Auto-updates style.css?v=4.3 and spotlight_shield.js?v=4.3 so phones never load stale cache
+  - Lightweight Flask + OpenCV-Headless backend (~130 MB RAM)
+  - Serves cached yolov10n.onnx, yolov8n-oiv7.onnx & dual_classes.json for browser AI
+  - Auto-injects dual_vision.js?v=4.5.1 into index.html (zero edits to index.html needed)
+  - Buyer-Only Mode runs shared window.HGVisionEngine (Alternating YOLOv10n + YOLOv8n-OIV7,
+    calibrated 2-10 cm Laplacian Defocus Trap, Privacy-Shutter, Adaptive Spotlight & Snap-Shut)
   - Full 3-hash SQLite GI Vault registration & accurate JPEG Q=85 survival check
   - Dynamic HTTPS /robots.txt, /sitemap.xml, and Google Search Console meta injection
 """
@@ -35,14 +35,14 @@ from preprocessor import (
 from cloak_engine import apply_cloak
 from db_manager import DatabaseManager
 
-VERSION = "3.3-render"
-ASSET_VER = "4.3"
+VERSION = "3.5.1-render-dual"
+ASSET_VER = "4.5.1"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 WEAVER_PIN = os.environ.get("WEAVER_PIN", "2026").strip() or "2026"
 MAX_RAM_ASSETS = 15
 
 app = Flask(__name__, static_folder=BASE_DIR, template_folder=BASE_DIR)
-app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB upload guard
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 DB_LOCK = threading.Lock()
@@ -107,7 +107,11 @@ def file_too_large(_err):
 
 @app.after_request
 def add_cache_headers(response):
-    if request.path.lower().endswith((".mp4", ".webm", ".ogg")):
+    lower_path = request.path.lower()
+    if lower_path.endswith((".mp4", ".webm", ".ogg", ".onnx")):
+        response.headers["Cache-Control"] = "public, max-age=86400"
+        return response
+    if lower_path.endswith(".json") and lower_path.startswith("/static/"):
         response.headers["Cache-Control"] = "public, max-age=3600"
         return response
     if request.path.startswith("/api/") or request.path.startswith("/b/"):
@@ -268,10 +272,26 @@ def _public_root_url() -> str:
     return root
 
 
+def _has_static_file(filename: str) -> bool:
+    return any(
+        os.path.isfile(p)
+        for p in [
+            os.path.join(BASE_DIR, filename),
+            os.path.join(BASE_DIR, "static", filename),
+        ]
+    )
+
+
 # ---------------- HEALTH CHECK & SEO ----------------
 @app.route("/healthz")
 def healthz():
-    return jsonify({"status": "ok", "version": VERSION}), 200
+    return jsonify({
+        "status": "ok",
+        "version": VERSION,
+        "yolov10n_onnx_ready": _has_static_file("yolov10n.onnx"),
+        "yolov8n_oiv7_onnx_ready": _has_static_file("yolov8n-oiv7.onnx"),
+        "dual_classes_ready": _has_static_file("dual_classes.json"),
+    }), 200
 
 
 @app.route("/")
@@ -284,7 +304,7 @@ def index():
 
             gsc_token = _extract_gsc_token(os.environ.get("GOOGLE_SITE_VERIFICATION", ""))
             seo_block = (
-                '\n  <meta name="description" content="Heritage Guard — GI Handloom Cybersecurity & Anti-Scraping Vault for Pochampally Ikat, Gadwal Zari, and authentic Indian textiles. Features 8x8 DCT cloaking, 3-Zone LSB watermarking, and on-device browser AI optical defense." />\n'
+                '\n  <meta name="description" content="Heritage Guard — GI Handloom Cybersecurity & Anti-Scraping Vault for Pochampally Ikat, Gadwal Zari, and authentic Indian textiles. Features 8x8 DCT cloaking, 3-Zone LSB watermarking, and on-device YOLOv10n + YOLOv8n-OIV7 optical defense." />\n'
                 '  <meta name="keywords" content="Heritage Guard, GI Handloom, Pochampally Ikat, Gadwal Zari, anti-scraping, textile IP protection, handloom watermark, DCT cloak" />\n'
                 '  <meta property="og:title" content="Heritage Guard | GI Handloom Cybersecurity & Anti-Scraping Vault" />\n'
                 '  <meta property="og:description" content="Protect authentic Indian handloom designs from digital scraping, CAD cloning, and camera theft in volatile RAM." />\n'
@@ -300,6 +320,17 @@ def index():
                 r"style\.css(?:\?v=[0-9.]+)?",
                 f"style.css?v={ASSET_VER}",
                 page_html,
+            )
+            page_html = re.sub(
+                r'<script[^>]*src=["\'][^"\']*(?:oiv7_vision|dual_vision)\.js[^"\']*["\'][^>]*></script>\s*',
+                "",
+                page_html,
+            )
+            page_html = re.sub(
+                r'(<script[^>]*src=["\'][^"\']*spotlight_shield\.js[^"\']*["\'][^>]*></script>)',
+                rf'<script src="/static/dual_vision.js?v={ASSET_VER}"></script>\n  \1',
+                page_html,
+                count=1,
             )
             page_html = re.sub(
                 r"spotlight_shield\.js(?:\?v=[0-9.]+)?",
@@ -338,7 +369,7 @@ def serve_static(filename):
     return send_from_directory(BASE_DIR, filename)
 
 
-# ---------------- CYBERGUARD BUYER-ONLY MODE (UPGRADED MOBILE AI + SNAP-SHUT) ----------------
+# ---------------- CYBERGUARD BUYER-ONLY MODE (ALTERNATING DUAL AI + LAPLACIAN + SNAP-SHUT) ----------------
 BUYER_ONLY_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -447,14 +478,14 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
     <section class="v17-card showcase-panel">
       <div class="buyer-meta">
         <div>
-          <span class="section-tag">LOCKED B2B BUYER INSPECTION • ON-DEVICE BROWSER AI</span>
+          <span class="section-tag">LOCKED B2B BUYER INSPECTION • DUAL YOLOV10N + OIV7 AI</span>
           <h2 id="ui-asset-title" style="margin:2px 0 0 0;">__ASSET_LABEL__</h2>
         </div>
         <span id="val-cam-diag" style="font-weight:700; color:__DIAG_COLOR__;">__DIAG_INIT__</span>
       </div>
 
       <p class="v17-subtext" id="ui-buyer-help">
-        Slide your finger or cursor inside the frame to inspect threads through the adaptive Spotlight Aperture. Lifting your finger snaps the blur shut; long-pressing, copying, or raising a phone triggers an instant 0ms lockout.
+        Slide your finger or cursor inside the frame to inspect threads through the adaptive Spotlight Aperture. Lifting your finger snaps the blur shut; covering the lens, long-pressing, or raising a phone, tablet, or camera triggers an instant 0ms lockout.
       </p>
 
       <div id="weave-viewport" class="weave-viewport __INITIAL_LOCK_CLASS__">
@@ -467,7 +498,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
           <div class="unlock-icon">🔒📷</div>
           <h3 id="unlock-gate-title">LIVE CAMERA REQUIRED TO UNLOCK GI SAREE</h3>
           <p id="unlock-gate-desc">
-            This Tier-1 Zero-Trust GI link requires an unobstructed, live device camera. Zero photos or frames ever leave your device — AI phone defense runs strictly inside your browser.
+            This Tier-1 Zero-Trust GI link runs Alternating YOLOv10n + YOLOv8n-OIV7 (Phones, DSLRs &amp; Tablets) + Privacy-Shutter + Defocus Defense directly inside your browser. Zero camera frames ever leave your device.
           </p>
           <div id="unlock-error-msg" class="unlock-error-msg hidden"></div>
           <button id="btn-unlock-camera" class="btn-unlock-cam" type="button">
@@ -495,7 +526,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
               </p>
             </div>
             <p class="honeypot-sub">
-              8×8 Zari Adversarial Poison &amp; GI Forensic Breach Log Recorded. Keep your camera unobstructed and lower all recording devices to restore access.
+              8×8 Zari Adversarial Poison &amp; GI Forensic Breach Log Recorded. Keep your camera unobstructed and lower all phones, tablets, or cameras to restore access.
             </p>
           </div>
         </div>
@@ -510,9 +541,8 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
   </main>
 
   <video id="buyer-cam-video" class="cam-offscreen" width="320" height="240" autoplay muted playsinline></video>
-  <canvas id="buyer-ai-canvas" width="320" height="240" style="display:none;"></canvas>
-  <canvas id="buyer-liveness-canvas" width="96" height="72" style="display:none;"></canvas>
 
+  <script src="/static/dual_vision.js?v=__ASSET_VER__"></script>
   <script>
   (function () {
     const GATE_MODE = "__GATE_MODE__";
@@ -520,21 +550,21 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
 
     const I18N = {
       en: {
-        help: "Slide your finger or cursor inside the frame to inspect threads through the adaptive Spotlight Aperture. Lifting your finger snaps the blur shut; long-pressing, copying, or raising a phone triggers an instant 0ms lockout.",
+        help: "Slide your finger or cursor inside the frame to inspect threads through the adaptive Spotlight Aperture. Lifting your finger snaps the blur shut; covering the lens, long-pressing, or raising a phone, tablet, or camera triggers an instant 0ms lockout.",
         title: "PAKDA GAYA! UNAUTHORISED COPYING / OPTICAL THEFT BLOCKED",
         unlockBtn: "📷 Turn On Camera to Unlock GI Saree",
         unlockTitle: "LIVE CAMERA REQUIRED TO UNLOCK GI SAREE",
         legal: '⚖️ <strong>STATUTORY LEGAL NOTICE:</strong> Unauthorised copying or commercial reproduction of textile designs may constitute <strong>Intellectual Property Theft</strong>, punishable under <strong>Sections 51 and 63 of the Copyright Act, 1957</strong>, <strong>Section 22 of the Designs Act, 2000</strong>, and <strong>Section 39 of the GI Act, 1999</strong>. Legal action may result in imprisonment, fines and damages.'
       },
       te: {
-        help: "స్పాట్‌లైట్ ద్వారా చేనేత డిజైన్‌ను పరిశీలించడానికి వేలు లేదా కర్సర్ కదిలించండి. వేలు ఎత్తగానే చిత్రం మసకబారుతుంది; లాంగ్-ప్రెస్, కాపీ లేదా ఫోన్ ఎత్తితే 0ms లో స్క్రీన్ లాక్ అవుతుంది.",
+        help: "స్పాట్‌లైట్ ద్వారా చేనేత డిజైన్‌ను పరిశీలించడానికి వేలు లేదా కర్సర్ కదిలించండి. వేలు ఎత్తగానే చిత్రం మసకబారుతుంది; లాంగ్-ప్రెస్, చేయి అడ్డుపెట్టడం లేదా ఫోన్/టాబ్లెట్/కెమెరా ఎత్తితే 0ms లో స్క్రీన్ లాక్ అవుతుంది.",
         title: "పట్టుబడ్డారు! అనధికార కాపీ / ఫోటో చోరీ నిరోధించబడింది",
         unlockBtn: "📷 GI చీరను చూడటానికి కెమెరా ఆన్ చేయండి",
         unlockTitle: "GI చీరను అన్‌లాక్ చేయడానికి లైవ్ కెమెరా అవసరం",
         legal: '⚖️ <strong>చట్టపరమైన హెచ్చరిక:</strong> చేనేత డిజైన్లను అనధికారికంగా కాపీ చేయడం <strong>మేధో సంపత్తి చోరీ (IP Theft)</strong> కిందకు వస్తుంది. ఇది <strong>కాపీరైట్ చట్టం 1957 (సెక్షన్లు 51 &amp; 63)</strong>, <strong>డిజైన్స్ చట్టం 2000 (సెక్షన్ 22)</strong> మరియు <strong>GI చట్టం 1999 (సెక్షన్ 39)</strong> ప్రకారం జైలు శిక్ష మరియు జరిమానాకు గురిచేస్తుంది.'
       },
       hi: {
-        help: "स्पॉटलाइट के माध्यम से बुनाई देखने के लिए उंगली या कर्सर घुमाएं। उंगली हटाते ही छवि धुंधली हो जाती है; लॉन्ग-प्रेस, कॉपी या फ़ोन उठाने पर 0ms में स्क्रीन लॉक हो जाएगी।",
+        help: "स्पॉटलाइट के माध्यम से बुनाई देखने के लिए उंगली या कर्सर घुमाएं। उंगली हटाते ही छवि धुंधली हो जाती है; लॉन्ग-प्रेस, कैमरे पर हाथ या फ़ोन/टैबलेट/कैमरा उठाने पर 0ms में स्क्रीन लॉक हो जाएगी।",
         title: "पकड़ा गया! अनधिकृत कॉपी / ऑप्टिकल चोरी ब्लॉक की गई",
         unlockBtn: "📷 GI साड़ी देखने के लिए कैमरा चालू करें",
         unlockTitle: "GI साड़ी अनलॉक करने के लिए लाइव कैमरा आवश्यक है",
@@ -556,26 +586,22 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
     const canvas = document.getElementById("anti-shutter-canvas");
     const toast = document.getElementById("copy-warning-toast");
     const camVideo = document.getElementById("buyer-cam-video");
-    const aiCanvas = document.getElementById("buyer-ai-canvas");
-    const liveCanvas = document.getElementById("buyer-liveness-canvas");
+
+    const visionSession = window.HGVisionEngine ? window.HGVisionEngine.createSession() : null;
+    const scanIntervalMs = (window.HGVisionEngine && window.HGVisionEngine.recommendedIntervalMs)
+      ? window.HGVisionEngine.recommendedIntervalMs()
+      : 240;
 
     let cameraUnlocked = (GATE_MODE !== "strict");
     let shieldLocked = (GATE_MODE === "strict");
     let memeOverlayVisible = false;
     let manualHoldUntil = 0;
-    let aiHoldUntil = 0;
-    let lastAiThreatReason = "CELL_PHONE_DETECTED_BROWSER_AI";
     let lastBreachLogTs = 0;
     let toastTimer = null;
     let flickerPhase = 0;
     let buyerStream = null;
     let scanTimer = null;
     let scanInFlight = false;
-
-    let cocoModel = null;
-    let prevGray = null;
-    let liveFrames = 0;
-    let frozenStreak = 0;
     let longPressTimer = null;
     let touchStartX = 0;
     let touchStartY = 0;
@@ -632,123 +658,6 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       }).catch(() => {});
     }
 
-    function loadScriptWithFallback(urls) {
-      return new Promise((resolve, reject) => {
-        let idx = 0;
-        function tryNext() {
-          if (idx >= urls.length) { reject(new Error("CDNs failed")); return; }
-          const s = document.createElement("script");
-          s.src = urls[idx++];
-          s.async = true;
-          s.onload = resolve;
-          s.onerror = tryNext;
-          document.head.appendChild(s);
-        }
-        tryNext();
-      });
-    }
-
-    async function ensureBrowserAI() {
-      if (cocoModel) return cocoModel;
-      try {
-        if (!window.tf) {
-          await loadScriptWithFallback([
-            "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js",
-            "https://unpkg.com/@tensorflow/tfjs@4.22.0/dist/tf.min.js"
-          ]);
-        }
-        if (!window.cocoSsd) {
-          await loadScriptWithFallback([
-            "https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js",
-            "https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"
-          ]);
-        }
-        if (window.tf && window.tf.ready) {
-          await window.tf.ready();
-          if (window.tf.getBackend() !== "webgl") {
-            try { await window.tf.setBackend("webgl"); } catch (_) {
-              try { await window.tf.setBackend("cpu"); } catch (__) {}
-            }
-          }
-        }
-        try {
-          cocoModel = await window.cocoSsd.load({ base: "mobilenet_v2" });
-        } catch (_) {
-          cocoModel = await window.cocoSsd.load({ base: "lite_mobilenet_v2" });
-        }
-        return cocoModel;
-      } catch (_) {
-        return null;
-      }
-    }
-
-    function checkLivenessFromCanvas() {
-      const ctx = liveCanvas.getContext("2d", { willReadFrequently: true });
-      ctx.drawImage(aiCanvas, 0, 0, 96, 72);
-      const data = ctx.getImageData(0, 0, 96, 72).data;
-      const n = 96 * 72;
-      const gray = new Uint8Array(n);
-      let sum = 0;
-      let sumSq = 0;
-
-      for (let i = 0, p = 0; i < n; i++, p += 4) {
-        const y = (data[p] * 77 + data[p + 1] * 150 + data[p + 2] * 29) >> 8;
-        gray[i] = y;
-        sum += y;
-        sumSq += y * y;
-      }
-
-      const mean = sum / n;
-      const std = Math.sqrt(Math.max(0, (sumSq / n) - (mean * mean)));
-
-      if (mean < 16.0 || std < 7.5) {
-        prevGray = gray;
-        liveFrames = 0;
-        return { threat: true, live: false, reason: "PRIVACY_SHUTTER_OR_COVERED_CAMERA" };
-      }
-
-      if (prevGray) {
-        let diffSum = 0;
-        for (let i = 0; i < n; i++) diffSum += Math.abs(gray[i] - prevGray[i]);
-        if (diffSum / n < 0.30) {
-          frozenStreak++;
-          liveFrames = 0;
-        } else {
-          frozenStreak = 0;
-          liveFrames++;
-        }
-      } else {
-        liveFrames = 1;
-      }
-      prevGray = gray;
-
-      const limit = cameraUnlocked ? 4 : 2;
-      if (frozenStreak >= limit) {
-        return { threat: true, live: false, reason: "PRIVACY_SHUTTER_OR_FROZEN_CAMERA" };
-      }
-      return { threat: false, live: liveFrames >= 2, reason: "SAFE" };
-    }
-
-    function evaluatePredictions(preds) {
-      if (!Array.isArray(preds) || preds.length === 0) return "";
-      const personPresent = preds.some((p) => p.class === "person" && p.score >= 0.30);
-      const frameArea = 320 * 240;
-
-      for (const p of preds) {
-        const cls = p.class;
-        const sc = p.score || 0;
-        const box = p.bbox || [0, 0, 0, 0];
-        const areaRatio = (box[2] * box[3]) / frameArea;
-
-        if (cls === "cell phone" && sc >= 0.14) return "CELL_PHONE_DETECTED_BROWSER_AI";
-        if (cls === "remote" && sc >= 0.22 && areaRatio < 0.45) return "HANDHELD_OPTICAL_DEVICE_DETECTED";
-        if (personPresent && cls === "book" && sc >= 0.28 && areaRatio < 0.40) return "HANDHELD_DEVICE_CASE_DETECTED";
-        if (personPresent && (cls === "tv" || cls === "laptop") && sc >= 0.32 && areaRatio < 0.35) return "HANDHELD_SCREEN_DETECTED";
-        if (personPresent && cls === "mouse" && sc >= 0.30 && areaRatio < 0.20) return "HANDHELD_CAMERA_LENS_DETECTED";
-      }
-      return "";
-    }
-
     function moveSpotlight(clientX, clientY) {
       if (shieldLocked || !cameraUnlocked || !viewport || !clearLayer) return;
       const rect = viewport.getBoundingClientRect();
@@ -790,10 +699,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
         buyerStream = null;
       }
       if (camVideo) { try { camVideo.srcObject = null; } catch (_) {} }
-      prevGray = null;
-      liveFrames = 0;
-      frozenStreak = 0;
-      aiHoldUntil = 0;
+      if (visionSession) visionSession.reset();
     }
 
     function showLiveShutterGateWarning(reasonCode) {
@@ -808,7 +714,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
         unlockBtn.textContent = "⏳ Waiting for Open Live Camera...";
       }
       if (unlockErr) {
-        unlockErr.textContent = "🚫 Blocked (" + reasonCode + "). Open camera shutter and lower phones to unlock automatically.";
+        unlockErr.textContent = "🚫 Blocked (" + reasonCode + "). Open camera shutter, remove hand from lens, and lower phones/cameras to unlock automatically.";
         unlockErr.classList.remove("hidden");
       }
       badge.textContent = "🔒 BLOCKED: " + reasonCode;
@@ -871,13 +777,10 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
         if (memeOverlayVisible) { memeOverlayVisible = false; stopMemeVideo(); }
         if (unlockGate) unlockGate.classList.add("hidden");
         if (unlockErr) unlockErr.classList.add("hidden");
-        badge.textContent = GATE_MODE === "strict"
-          ? (cocoModel ? "🛡️ BROWSER AI CAMERA ACTIVE" : "🛡️ LIVENESS CAMERA ACTIVE")
-          : "🛡️ SPOTLIGHT + 8x8 ZARI CLOAK";
+        const modeLabel = window.HGVisionEngine ? window.HGVisionEngine.getDetectorLabel() : "DUAL AI GUARD";
+        badge.textContent = GATE_MODE === "strict" ? "🛡️ " + modeLabel.toUpperCase() : "🛡️ SPOTLIGHT + 8x8 ZARI CLOAK";
         badge.className = "pill pill-safe";
-        diag.textContent = GATE_MODE === "strict"
-          ? (cocoModel ? "SAFE (AI PHONE GUARD ACTIVE)" : "SAFE (LIVENESS ONLY)")
-          : "STANDARD PREVIEW";
+        diag.textContent = GATE_MODE === "strict" ? "SAFE (" + modeLabel + ")" : "STANDARD PREVIEW";
         diag.style.color = "#34d399";
       }
     }
@@ -899,8 +802,8 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       logBreachDebounced(reason);
     }
 
-    async function runBrowserAIScanLoop() {
-      if (GATE_MODE !== "strict" || !buyerStream) return;
+    async function runDualScanLoop() {
+      if (GATE_MODE !== "strict" || !buyerStream || !visionSession) return;
 
       const track = buyerStream.getVideoTracks()[0];
       if (!buyerStream.active || !track || track.readyState !== "live" || track.muted) {
@@ -911,30 +814,12 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       if (!scanInFlight && camVideo.readyState >= 2 && camVideo.videoWidth > 0) {
         scanInFlight = true;
         try {
-          const aiCtx = aiCanvas.getContext("2d", { willReadFrequently: true });
-          aiCtx.drawImage(camVideo, 0, 0, 320, 240);
-
-          const liveCheck = checkLivenessFromCanvas();
-          let threatReason = liveCheck.threat ? liveCheck.reason : "";
-
-          if (!threatReason && cocoModel) {
-            const preds = await cocoModel.detect(aiCanvas, 15, 0.14);
-            threatReason = evaluatePredictions(preds);
-          }
-
-          const now = Date.now();
-          if (threatReason) {
-            aiHoldUntil = now + 2500;
-            lastAiThreatReason = threatReason;
-          } else if (now < aiHoldUntil) {
-            threatReason = lastAiThreatReason;
-          }
-
-          if (threatReason) {
-            if (!cameraUnlocked) showLiveShutterGateWarning(threatReason);
-            else setShield(true, threatReason);
+          const res = await visionSession.scan(camVideo);
+          if (res.threat_detected) {
+            if (!cameraUnlocked) showLiveShutterGateWarning(res.reason);
+            else setShield(true, res.reason);
           } else if (!cameraUnlocked) {
-            if (liveCheck.live) {
+            if (res.camera_liveness_verified) {
               cameraUnlocked = true;
               setShield(false, "LIVE_CAMERA_VERIFIED");
             } else if (unlockBtn) {
@@ -950,7 +835,7 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
       }
 
       if (buyerStream) {
-        scanTimer = setTimeout(runBrowserAIScanLoop, 220);
+        scanTimer = setTimeout(runDualScanLoop, scanIntervalMs);
       }
     }
 
@@ -984,11 +869,14 @@ BUYER_ONLY_HTML = """<!DOCTYPE html>
           track.onmute = () => lockForClosedCamera("CAMERA_MUTED_OR_BLOCKED", "Camera feed was interrupted or blocked. Keep your camera active to continue.");
         }
 
-        if (unlockBtn) unlockBtn.textContent = "⏳ Downloading Phone-Detector AI (~4s)...";
-        await ensureBrowserAI();
+        if (window.HGVisionEngine) {
+          await window.HGVisionEngine.init((msg) => {
+            if (unlockBtn) unlockBtn.textContent = msg;
+          });
+        }
 
         if (unlockBtn) unlockBtn.textContent = "⏳ Verifying Live Camera Sensor...";
-        scanTimer = setTimeout(runBrowserAIScanLoop, 220);
+        scanTimer = setTimeout(runDualScanLoop, scanIntervalMs);
       } catch (err) {
         const msg =
           err && err.name === "NotAllowedError"
